@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "宝宝成长记录",
+    "slug": "baby-care-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["ios", "android", "web"]
+  }
+}
