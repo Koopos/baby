@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "宝宝日常记录",
+    "slug": "baby-daily-record",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light"
+  }
+}
