@@ -19,7 +19,7 @@ function getTimeLabel(datetime) {
 }
 
 function getRecordIcon(feedType) {
-  return feedType === '辅食' ? '🥣' : '🍼';
+  return feedType === '疫苗' ? '💉' : feedType === '辅食' ? '🥣' : '🍼';
 }
 
 export default function HomeScreen() {
@@ -42,12 +42,14 @@ export default function HomeScreen() {
   );
 
   const summary = useMemo(() => {
-    const feedRecords = records.filter((item) => item.feed_type !== '辅食');
-    const solidFoodRecords = records.filter((item) => item.feed_type === '辅食');
+    const vaccineRecords = records.filter((item) => item.record_type === 'vaccine');
+    const feedRecords = records.filter((item) => item.record_type !== 'vaccine' && item.feed_type !== '辅食');
+    const solidFoodRecords = records.filter((item) => item.record_type !== 'vaccine' && item.feed_type === '辅食');
     const totalDuration = records.reduce((total, item) => total + (item.duration || 0), 0);
     const avgDuration = records.length > 0 ? Math.round(totalDuration / records.length) : 0;
 
     return [
+      { icon: '💉', title: '疫苗', times: `${vaccineRecords.length}次`, amount: vaccineRecords.length > 0 ? '含最近接种记录' : '尚无接种记录', bg: '#F1EEFF' },
       { icon: '🍼', title: '喂奶', times: `${feedRecords.length}次`, amount: `总时长 ${feedRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`, bg: '#FCECEC' },
       { icon: '🥣', title: '辅食', times: `${solidFoodRecords.length}次`, amount: `总时长 ${solidFoodRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`, bg: '#F3FAEA' },
       { icon: '⏱️', title: '总时长', times: `${totalDuration}分钟`, amount: `平均每次 ${avgDuration} 分钟`, bg: '#FFF5E7' },
@@ -83,12 +85,13 @@ export default function HomeScreen() {
           records.map((row) => (
             <View key={row.id} style={styles.row}>
               <Text style={styles.time}>{getTimeLabel(row.created_at)}</Text>
-              <Text style={styles.rowIcon}>{getRecordIcon(row.feed_type)}</Text>
+              <Text style={styles.rowIcon}>{row.record_type === 'vaccine' ? '💉' : getRecordIcon(row.feed_type)}</Text>
               <View style={styles.rowTextWrap}>
                 <Text style={styles.rowTitle}>{row.feed_type}</Text>
                 <Text style={styles.rowDesc}>
-                  {row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}
-                  {row.duration || 0}分钟{row.notes ? ` · ${row.notes}` : ''}
+                  {row.record_type === 'vaccine'
+                    ? `${row.vaccine_dose ? `${row.vaccine_dose} · ` : ''}${row.hospital ? `${row.hospital}` : '疫苗接种'}${row.notes ? ` · ${row.notes}` : ''}`
+                    : `${row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}${row.duration || 0}分钟${row.notes ? ` · ${row.notes}` : ''}`}
                 </Text>
               </View>
             </View>

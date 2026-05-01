@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getRecordDateKeys, getRecordsByDate } from '../db/recordsRepository';
+import { getRecordDateKeys, getRecordsByDate, getSolidFoodRecordsByMonth } from '../db/recordsRepository';
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -14,6 +14,13 @@ function formatDateKey(year, month, day) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+function extractSolidFoodItems(solidFood) {
+  return (solidFood || '')
+    .split(/[+,，、]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function StatsScreen() {
   const today = new Date();
   const year = today.getFullYear();
@@ -21,25 +28,47 @@ export default function StatsScreen() {
   const [selectedDate, setSelectedDate] = useState(formatDateKey(year, month, today.getDate()));
   const [selectedRecords, setSelectedRecords] = useState([]);
   const [recordDateKeys, setRecordDateKeys] = useState([]);
+  const [solidFoodPreviewByDate, setSolidFoodPreviewByDate] = useState({});
 
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
       const loadData = async () => {
-        const [allDateKeys, dayRecords] = await Promise.all([
+        const [allDateKeys, dayRecords, monthSolidFoodRecords] = await Promise.all([
           getRecordDateKeys(),
           getRecordsByDate(selectedDate),
+          getSolidFoodRecordsByMonth(year, month),
         ]);
+
+        const solidFoodMap = {};
+        for (const item of monthSolidFoodRecords) {
+          const dateKey = item.date_key;
+          if (!dateKey) {
+            continue;
+          }
+          if (!solidFoodMap[dateKey]) {
+            solidFoodMap[dateKey] = [];
+          }
+          const parsedFoods = extractSolidFoodItems(item.solid_food);
+          for (const foodName of parsedFoods) {
+            if (solidFoodMap[dateKey].length >= 2) {
+              break;
+            }
+            solidFoodMap[dateKey].push(foodName);
+          }
+        }
+
         if (mounted) {
           setRecordDateKeys(allDateKeys);
           setSelectedRecords(dayRecords);
+          setSolidFoodPreviewByDate(solidFoodMap);
         }
       };
       loadData();
       return () => {
         mounted = false;
       };
-    }, [selectedDate])
+    }, [month, selectedDate, year])
   );
 
   const calendarCells = useMemo(() => {
@@ -60,8 +89,11 @@ export default function StatsScreen() {
     return cells;
   }, [month, year]);
 
-  const feedCount = selectedRecords.length;
-  const totalDuration = selectedRecords.reduce((total, item) => total + (item.duration || 0), 0);
+  const vaccineCount = selectedRecords.filter((item) => item.record_type === 'vaccine').length;
+  const feedCount = selectedRecords.length - vaccineCount;
+  const totalDuration = selectedRecords
+    .filter((item) => item.record_type !== 'vaccine')
+    .reduce((total, item) => total + (item.duration || 0), 0);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -81,6 +113,7 @@ export default function StatsScreen() {
             const dateKey = formatDateKey(year, month, day);
             const hasRecord = recordDateKeys.includes(dateKey);
             const isSelected = selectedDate === dateKey;
+            const solidFoodPreview = solidFoodPreviewByDate[dateKey] || [];
             return (
               <Pressable
                 key={dateKey}
@@ -88,6 +121,14 @@ export default function StatsScreen() {
                 onPress={() => setSelectedDate(dateKey)}
               >
                 <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
+                {solidFoodPreview.length > 0 ? (
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.dayFoodPreview, isSelected && styles.dayFoodPreviewSelected]}
+                  >
+                    {solidFoodPreview.join('、')}
+                  </Text>
+                ) : null}
                 {hasRecord ? <View style={[styles.dot, isSelected && styles.dotSelected]} /> : null}
               </Pressable>
             );
@@ -97,7 +138,7 @@ export default function StatsScreen() {
 
       <View style={styles.detailCard}>
         <Text style={styles.detailTitle}>{selectedDate} 记录</Text>
-        <Text style={styles.detailMeta}>记录 {feedCount}次 · 总时长 {totalDuration}分钟</Text>
+        <Text style={styles.detailMeta}>喂养 {feedCount}次 · 疫苗 {vaccineCount}次 · 总时长 {totalDuration}分钟</Text>
         {selectedRecords.length === 0 ? (
           <Text style={styles.emptyText}>当天暂无记录</Text>
         ) : (
@@ -110,12 +151,15 @@ export default function StatsScreen() {
                   hour12: false,
                 })}
               </Text>
-              <Text style={styles.rowIcon}>{item.feed_type === '辅食' ? '🥣' : '🍼'}</Text>
+              <Text style={styles.rowIcon}>
+                {item.record_type === 'vaccine' ? '💉' : item.feed_type === '辅食' ? '🥣' : '🍼'}
+              </Text>
               <View style={styles.rowTextWrap}>
                 <Text style={styles.rowTitle}>{item.feed_type}</Text>
                 <Text style={styles.rowDesc}>
-                  {item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}
-                  {item.duration || 0}分钟{item.notes ? ` · ${item.notes}` : ''}
+                  {item.record_type === 'vaccine'
+                    ? `${item.vaccine_dose ? `${item.vaccine_dose} · ` : ''}${item.hospital || '疫苗接种'}${item.notes ? ` · ${item.notes}` : ''}`
+                    : `${item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}${item.duration || 0}分钟${item.notes ? ` · ${item.notes}` : ''}`}
                 </Text>
               </View>
             </View>
@@ -134,17 +178,27 @@ const styles = StyleSheet.create({
   weekRow: { flexDirection: 'row', marginBottom: 8 },
   weekLabel: { flex: 1, textAlign: 'center', color: '#888', fontSize: 13 },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  emptyCell: { width: '14.285%', aspectRatio: 1 },
+  emptyCell: { width: '14.285%', height: 66 },
   dayCell: {
     width: '14.285%',
-    aspectRatio: 1,
+    height: 66,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 6,
+    paddingHorizontal: 2,
     borderRadius: 10,
   },
   dayCellSelected: { backgroundColor: '#FF6E68' },
   dayText: { color: '#333', fontWeight: '600' },
   dayTextSelected: { color: '#fff' },
+  dayFoodPreview: {
+    fontSize: 10,
+    lineHeight: 12,
+    textAlign: 'center',
+    color: '#777',
+    marginTop: 2,
+  },
+  dayFoodPreviewSelected: { color: '#FFF2F1' },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FF6E68', marginTop: 4 },
   dotSelected: { backgroundColor: '#fff' },
   detailCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14 },
