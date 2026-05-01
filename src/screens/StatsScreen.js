@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getSolidFoodRecordsByMonth } from '../db/recordsRepository';
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
@@ -96,81 +97,84 @@ export default function StatsScreen() {
     .reduce((total, item) => total + (item.duration || 0), 0);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>日历记录</Text>
-      <View style={styles.calendarCard}>
-        <Text style={styles.monthTitle}>{year}年{month}月</Text>
-        <View style={styles.weekRow}>
-          {weekLabels.map((label) => (
-            <Text key={label} style={styles.weekLabel}>{label}</Text>
-          ))}
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>日历记录</Text>
+        <View style={styles.calendarCard}>
+          <Text style={styles.monthTitle}>{year}年{month}月</Text>
+          <View style={styles.weekRow}>
+            {weekLabels.map((label) => (
+              <Text key={label} style={styles.weekLabel}>{label}</Text>
+            ))}
+          </View>
+          <View style={styles.daysGrid}>
+            {calendarCells.map((day, index) => {
+              if (!day) {
+                return <View key={`empty-${index}`} style={styles.emptyCell} />;
+              }
+              const dateKey = formatDateKey(year, month, day);
+              const hasRecord = recordDateKeys.includes(dateKey);
+              const isSelected = selectedDate === dateKey;
+              const solidFoodPreview = solidFoodPreviewByDate[dateKey] || [];
+              return (
+                <Pressable
+                  key={dateKey}
+                  style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+                  onPress={() => setSelectedDate(dateKey)}
+                >
+                  <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
+                  {solidFoodPreview.length > 0 ? (
+                    <Text
+                      numberOfLines={2}
+                      style={[styles.dayFoodPreview, isSelected && styles.dayFoodPreviewSelected]}
+                    >
+                      {solidFoodPreview.join('、')}
+                    </Text>
+                  ) : null}
+                  {hasRecord ? <View style={[styles.dot, isSelected && styles.dotSelected]} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-        <View style={styles.daysGrid}>
-          {calendarCells.map((day, index) => {
-            if (!day) {
-              return <View key={`empty-${index}`} style={styles.emptyCell} />;
-            }
-            const dateKey = formatDateKey(year, month, day);
-            const hasRecord = recordDateKeys.includes(dateKey);
-            const isSelected = selectedDate === dateKey;
-            const solidFoodPreview = solidFoodPreviewByDate[dateKey] || [];
-            return (
-              <Pressable
-                key={dateKey}
-                style={[styles.dayCell, isSelected && styles.dayCellSelected]}
-                onPress={() => setSelectedDate(dateKey)}
-              >
-                <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
-                {solidFoodPreview.length > 0 ? (
-                  <Text
-                    numberOfLines={2}
-                    style={[styles.dayFoodPreview, isSelected && styles.dayFoodPreviewSelected]}
-                  >
-                    {solidFoodPreview.join('、')}
-                  </Text>
-                ) : null}
-                {hasRecord ? <View style={[styles.dot, isSelected && styles.dotSelected]} /> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
 
-      <View style={styles.detailCard}>
-        <Text style={styles.detailTitle}>{selectedDate} 记录</Text>
-        <Text style={styles.detailMeta}>喂养 {feedCount}次 · 疫苗 {vaccineCount}次 · 总时长 {totalDuration}分钟</Text>
-        {selectedRecords.length === 0 ? (
-          <Text style={styles.emptyText}>当天暂无记录</Text>
-        ) : (
-          selectedRecords.map((item, index) => (
-            <View key={`${item.id}-${index}`} style={styles.row}>
-              <Text style={styles.time}>
-                {new Date(item.created_at.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}
-              </Text>
-              <Text style={styles.rowIcon}>
-                {item.record_type === 'vaccine' ? '💉' : item.feed_type === '辅食' ? '🥣' : '🍼'}
-              </Text>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>{item.feed_type}</Text>
-                <Text style={styles.rowDesc}>
-                  {item.record_type === 'vaccine'
-                    ? `${item.vaccine_dose ? `${item.vaccine_dose} · ` : ''}${item.hospital || '疫苗接种'}${item.notes ? ` · ${item.notes}` : ''}`
-                    : `${item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}${item.duration || 0}分钟${item.notes ? ` · ${item.notes}` : ''}`}
+        <View style={styles.detailCard}>
+          <Text style={styles.detailTitle}>{selectedDate} 记录</Text>
+          <Text style={styles.detailMeta}>喂养 {feedCount}次 · 疫苗 {vaccineCount}次 · 总时长 {totalDuration}分钟</Text>
+          {selectedRecords.length === 0 ? (
+            <Text style={styles.emptyText}>当天暂无记录</Text>
+          ) : (
+            selectedRecords.map((item, index) => (
+              <View key={`${item.id}-${index}`} style={styles.row}>
+                <Text style={styles.time}>
+                  {new Date(item.created_at.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
                 </Text>
+                <Text style={styles.rowIcon}>
+                  {item.record_type === 'vaccine' ? '💉' : item.feed_type === '辅食' ? '🥣' : '🍼'}
+                </Text>
+                <View style={styles.rowTextWrap}>
+                  <Text style={styles.rowTitle}>{item.feed_type}</Text>
+                  <Text style={styles.rowDesc}>
+                    {item.record_type === 'vaccine'
+                      ? `${item.vaccine_dose ? `${item.vaccine_dose} · ` : ''}${item.hospital || '疫苗接种'}${item.notes ? ` · ${item.notes}` : ''}`
+                      : `${item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}${item.duration || 0}分钟${item.notes ? ` · ${item.notes}` : ''}`}
+                  </Text>
+                </View>
               </View>
-            </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   content: { padding: 16, paddingBottom: 30, backgroundColor: '#FAFAFA' },
   title: { fontSize: 28, fontWeight: '700', color: '#222', marginBottom: 16 },
   calendarCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 16 },

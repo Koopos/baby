@@ -1,4 +1,5 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const growthStats = [
   { icon: '🎂', label: '月龄', value: '6个月20天', bg: '#FCECEC' },
@@ -20,69 +21,72 @@ const menuItems = [
 
 export default function MeScreen() {
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>我的</Text>
-      <View style={styles.profileCard}>
-        <View style={styles.profileTop}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>👶</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>我的</Text>
+        <View style={styles.profileCard}>
+          <View style={styles.profileTop}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>👶</Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>小宝贝</Text>
+              <Text style={styles.profileMeta}>男宝宝 · 生日 2023-11-01</Text>
+              <Text style={styles.profileMeta}>下一次体检：2024-06-08</Text>
+            </View>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>小宝贝</Text>
-            <Text style={styles.profileMeta}>男宝宝 · 生日 2023-11-01</Text>
-            <Text style={styles.profileMeta}>下一次体检：2024-06-08</Text>
+          <View style={styles.profileTag}>
+            <Text style={styles.profileTagText}>本周记录完整度 92%</Text>
           </View>
         </View>
-        <View style={styles.profileTag}>
-          <Text style={styles.profileTagText}>本周记录完整度 92%</Text>
+
+        <Text style={styles.sectionTitle}>成长概览</Text>
+        <View style={styles.statsGrid}>
+          {growthStats.map((item) => (
+            <View key={item.label} style={[styles.statsCard, { backgroundColor: item.bg }]}>
+              <Text style={styles.statsIcon}>{item.icon}</Text>
+              <Text style={styles.statsLabel}>{item.label}</Text>
+              <Text style={styles.statsValue}>{item.value}</Text>
+            </View>
+          ))}
         </View>
-      </View>
 
-      <Text style={styles.sectionTitle}>成长概览</Text>
-      <View style={styles.statsGrid}>
-        {growthStats.map((item) => (
-          <View key={item.label} style={[styles.statsCard, { backgroundColor: item.bg }]}>
-            <Text style={styles.statsIcon}>{item.icon}</Text>
-            <Text style={styles.statsLabel}>{item.label}</Text>
-            <Text style={styles.statsValue}>{item.value}</Text>
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.quickCard}>
-        {quickActions.map((item) => (
-          <View key={item.title} style={styles.quickRow}>
-            <View style={styles.rowMain}>
-              <Text style={styles.rowIcon}>{item.icon}</Text>
-              <View>
-                <Text style={styles.rowTitle}>{item.title}</Text>
-                <Text style={styles.rowSub}>{item.desc}</Text>
+        <View style={styles.quickCard}>
+          {quickActions.map((item) => (
+            <View key={item.title} style={styles.quickRow}>
+              <View style={styles.rowMain}>
+                <Text style={styles.rowIcon}>{item.icon}</Text>
+                <View>
+                  <Text style={styles.rowTitle}>{item.title}</Text>
+                  <Text style={styles.rowSub}>{item.desc}</Text>
+                </View>
               </View>
+              <Text style={styles.rowArrow}>›</Text>
             </View>
-            <Text style={styles.rowArrow}>›</Text>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      <View style={styles.listCard}>
-        {menuItems.map((item) => (
-          <View key={item.title} style={styles.settingRow}>
-            <View style={styles.rowMain}>
-              <Text style={styles.rowIcon}>{item.icon}</Text>
-              <View>
-                <Text style={styles.rowTitle}>{item.title}</Text>
-                <Text style={styles.rowSub}>{item.desc}</Text>
+        <View style={styles.listCard}>
+          {menuItems.map((item) => (
+            <View key={item.title} style={styles.settingRow}>
+              <View style={styles.rowMain}>
+                <Text style={styles.rowIcon}>{item.icon}</Text>
+                <View>
+                  <Text style={styles.rowTitle}>{item.title}</Text>
+                  <Text style={styles.rowSub}>{item.desc}</Text>
+                </View>
               </View>
+              <Text style={styles.rowArrow}>›</Text>
             </View>
-            <Text style={styles.rowArrow}>›</Text>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+          ))}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   content: { padding: 16, paddingBottom: 30, backgroundColor: '#FAFAFA' },
   title: { fontSize: 28, fontWeight: '700', color: '#222', marginBottom: 16 },
   profileCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16 },
