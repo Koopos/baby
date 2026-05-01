@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordsByDate } from '../db/recordsRepository';
 
 function getDateKey(date) {
@@ -58,51 +59,54 @@ export default function HomeScreen() {
   }, [records]);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.title}>宝宝日常记录</Text>
-      <View style={styles.profileCard}>
-        <Text style={styles.profileName}>小宝贝 ♂</Text>
-        <Text style={styles.profileMeta}>6个月20天 · 2024年5月20日（周一）</Text>
-      </View>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>宝宝日常记录</Text>
+        <View style={styles.profileCard}>
+          <Text style={styles.profileName}>小宝贝 ♂</Text>
+          <Text style={styles.profileMeta}>6个月20天 · 2024年5月20日（周一）</Text>
+        </View>
 
-      <Text style={styles.sectionTitle}>今日记录概览</Text>
-      <View style={styles.summaryGrid}>
-        {summary.map((item) => (
-          <View key={item.title} style={[styles.summaryCard, { backgroundColor: item.bg }]}>
-            <Text style={styles.icon}>{item.icon}</Text>
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardSub}>{item.times}</Text>
-            <Text style={styles.cardSub}>{item.amount}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>今日记录</Text>
-      <View style={styles.listCard}>
-        {records.length === 0 ? (
-          <Text style={styles.emptyText}>今天暂无记录，去“记录”页新增一条吧。</Text>
-        ) : (
-          records.map((row) => (
-            <View key={row.id} style={styles.row}>
-              <Text style={styles.time}>{getTimeLabel(row.created_at)}</Text>
-              <Text style={styles.rowIcon}>{row.record_type === 'vaccine' ? '💉' : getRecordIcon(row.feed_type)}</Text>
-              <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>{row.feed_type}</Text>
-                <Text style={styles.rowDesc}>
-                  {row.record_type === 'vaccine'
-                    ? `${row.vaccine_dose ? `${row.vaccine_dose} · ` : ''}${row.hospital ? `${row.hospital}` : '疫苗接种'}${row.notes ? ` · ${row.notes}` : ''}`
-                    : `${row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}${row.duration || 0}分钟${row.notes ? ` · ${row.notes}` : ''}`}
-                </Text>
-              </View>
+        <Text style={styles.sectionTitle}>今日记录概览</Text>
+        <View style={styles.summaryGrid}>
+          {summary.map((item) => (
+            <View key={item.title} style={[styles.summaryCard, { backgroundColor: item.bg }]}>
+              <Text style={styles.icon}>{item.icon}</Text>
+              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={styles.cardSub}>{item.times}</Text>
+              <Text style={styles.cardSub}>{item.amount}</Text>
             </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+          ))}
+        </View>
+
+        <Text style={styles.sectionTitle}>今日记录</Text>
+        <View style={styles.listCard}>
+          {records.length === 0 ? (
+            <Text style={styles.emptyText}>今天暂无记录，去“记录”页新增一条吧。</Text>
+          ) : (
+            records.map((row) => (
+              <View key={row.id} style={styles.row}>
+                <Text style={styles.time}>{getTimeLabel(row.created_at)}</Text>
+                <Text style={styles.rowIcon}>{row.record_type === 'vaccine' ? '💉' : getRecordIcon(row.feed_type)}</Text>
+                <View style={styles.rowTextWrap}>
+                  <Text style={styles.rowTitle}>{row.feed_type}</Text>
+                  <Text style={styles.rowDesc}>
+                    {row.record_type === 'vaccine'
+                      ? `${row.vaccine_dose ? `${row.vaccine_dose} · ` : ''}${row.hospital ? `${row.hospital}` : '疫苗接种'}${row.notes ? ` · ${row.notes}` : ''}`
+                      : `${row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}${row.duration || 0}分钟${row.notes ? ` · ${row.notes}` : ''}`}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   content: { padding: 16, paddingBottom: 30, backgroundColor: '#FAFAFA' },
   title: { fontSize: 28, fontWeight: '700', color: '#222', marginBottom: 16 },
   profileCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16 },
