@@ -1,21 +1,60 @@
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getRecordsByDate } from '../db/recordsRepository';
 
-const summary = [
-  { icon: '🍼', title: '喂奶', times: '5次', amount: '850ml', bg: '#FCECEC' },
-  { icon: '💩', title: '大小便', times: '2次', amount: '6次', bg: '#FFF5E7' },
-  { icon: '🥣', title: '辅食', times: '2次', amount: '约120g', bg: '#F3FAEA' },
-  { icon: '🌙', title: '睡眠', times: '2次', amount: '10小时', bg: '#EEF3FF' },
-];
+function getDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
-const timeline = [
-  ['08:00', '🍼', '喂奶', '母乳 120ml'],
-  ['10:30', '💩', '大便', '黄色 正常'],
-  ['12:30', '🥣', '辅食', '米粉 + 苹果泥 60g'],
-  ['15:00', '🍼', '喂奶', '母乳 150ml'],
-  ['16:20', '💩', '大便', '黄色 正常'],
-];
+function getTimeLabel(datetime) {
+  return new Date(datetime.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function getRecordIcon(feedType) {
+  return feedType === '辅食' ? '🥣' : '🍼';
+}
 
 export default function HomeScreen() {
+  const [records, setRecords] = useState([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      const loadTodayRecords = async () => {
+        const todayRecords = await getRecordsByDate(getDateKey(new Date()));
+        if (mounted) {
+          setRecords(todayRecords);
+        }
+      };
+      loadTodayRecords();
+      return () => {
+        mounted = false;
+      };
+    }, [])
+  );
+
+  const summary = useMemo(() => {
+    const feedRecords = records.filter((item) => item.feed_type !== '辅食');
+    const solidFoodRecords = records.filter((item) => item.feed_type === '辅食');
+    const totalDuration = records.reduce((total, item) => total + (item.duration || 0), 0);
+    const avgDuration = records.length > 0 ? Math.round(totalDuration / records.length) : 0;
+
+    return [
+      { icon: '🍼', title: '喂奶', times: `${feedRecords.length}次`, amount: `总时长 ${feedRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`, bg: '#FCECEC' },
+      { icon: '🥣', title: '辅食', times: `${solidFoodRecords.length}次`, amount: `总时长 ${solidFoodRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`, bg: '#F3FAEA' },
+      { icon: '⏱️', title: '总时长', times: `${totalDuration}分钟`, amount: `平均每次 ${avgDuration} 分钟`, bg: '#FFF5E7' },
+      { icon: '📝', title: '记录数', times: `${records.length}条`, amount: '来自本地 SQLite', bg: '#EEF3FF' },
+    ];
+  }, [records]);
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.title}>宝宝日常记录</Text>
@@ -38,16 +77,23 @@ export default function HomeScreen() {
 
       <Text style={styles.sectionTitle}>今日记录</Text>
       <View style={styles.listCard}>
-        {timeline.map((row) => (
-          <View key={row[0] + row[2]} style={styles.row}>
-            <Text style={styles.time}>{row[0]}</Text>
-            <Text style={styles.rowIcon}>{row[1]}</Text>
-            <View style={styles.rowTextWrap}>
-              <Text style={styles.rowTitle}>{row[2]}</Text>
-              <Text style={styles.rowDesc}>{row[3]}</Text>
+        {records.length === 0 ? (
+          <Text style={styles.emptyText}>今天暂无记录，去“记录”页新增一条吧。</Text>
+        ) : (
+          records.map((row) => (
+            <View key={row.id} style={styles.row}>
+              <Text style={styles.time}>{getTimeLabel(row.created_at)}</Text>
+              <Text style={styles.rowIcon}>{getRecordIcon(row.feed_type)}</Text>
+              <View style={styles.rowTextWrap}>
+                <Text style={styles.rowTitle}>{row.feed_type}</Text>
+                <Text style={styles.rowDesc}>
+                  {row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}
+                  {row.duration || 0}分钟{row.notes ? ` · ${row.notes}` : ''}
+                </Text>
+              </View>
             </View>
-          </View>
-        ))}
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -66,6 +112,7 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
   cardSub: { color: '#666', marginTop: 2 },
   listCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, gap: 12 },
+  emptyText: { color: '#999', paddingVertical: 8 },
   row: { flexDirection: 'row', alignItems: 'center' },
   time: { width: 56, color: '#555', fontWeight: '600' },
   rowIcon: { width: 28, fontSize: 20 },

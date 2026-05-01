@@ -1,30 +1,10 @@
 import { useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getRecordDateKeys, getRecordsByDate } from '../db/recordsRepository';
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
-
-const dailyRecords = {
-  '2024-05-18': [
-    { type: '喂养', icon: '🍼', time: '08:00', detail: '母乳 120ml' },
-    { type: '大小便', icon: '💩', time: '10:10', detail: '大便 1次' },
-    { type: '喂养', icon: '🍼', time: '12:40', detail: '配方奶 150ml' },
-  ],
-  '2024-05-19': [
-    { type: '喂养', icon: '🍼', time: '07:50', detail: '母乳 110ml' },
-    { type: '大小便', icon: '💧', time: '09:20', detail: '小便 2次' },
-    { type: '喂养', icon: '🍼', time: '14:30', detail: '母乳 130ml' },
-    { type: '大小便', icon: '💩', time: '18:20', detail: '大便 1次' },
-  ],
-  '2024-05-20': [
-    { type: '喂养', icon: '🍼', time: '08:00', detail: '母乳 120ml' },
-    { type: '大小便', icon: '💩', time: '10:30', detail: '大便 1次' },
-    { type: '喂养', icon: '🍼', time: '15:00', detail: '母乳 150ml' },
-  ],
-  '2024-05-21': [
-    { type: '喂养', icon: '🍼', time: '09:00', detail: '配方奶 140ml' },
-    { type: '大小便', icon: '💧', time: '11:15', detail: '小便 2次' },
-  ],
-};
 
 function pad(num) {
   return String(num).padStart(2, '0');
@@ -35,9 +15,32 @@ function formatDateKey(year, month, day) {
 }
 
 export default function StatsScreen() {
-  const year = 2024;
-  const month = 5;
-  const [selectedDate, setSelectedDate] = useState('2024-05-20');
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const [selectedDate, setSelectedDate] = useState(formatDateKey(year, month, today.getDate()));
+  const [selectedRecords, setSelectedRecords] = useState([]);
+  const [recordDateKeys, setRecordDateKeys] = useState([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      let mounted = true;
+      const loadData = async () => {
+        const [allDateKeys, dayRecords] = await Promise.all([
+          getRecordDateKeys(),
+          getRecordsByDate(selectedDate),
+        ]);
+        if (mounted) {
+          setRecordDateKeys(allDateKeys);
+          setSelectedRecords(dayRecords);
+        }
+      };
+      loadData();
+      return () => {
+        mounted = false;
+      };
+    }, [selectedDate])
+  );
 
   const calendarCells = useMemo(() => {
     const firstDay = new Date(year, month - 1, 1);
@@ -57,9 +60,8 @@ export default function StatsScreen() {
     return cells;
   }, [month, year]);
 
-  const selectedRecords = dailyRecords[selectedDate] || [];
-  const feedCount = selectedRecords.filter((item) => item.type === '喂养').length;
-  const toiletCount = selectedRecords.filter((item) => item.type === '大小便').length;
+  const feedCount = selectedRecords.length;
+  const totalDuration = selectedRecords.reduce((total, item) => total + (item.duration || 0), 0);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -77,7 +79,7 @@ export default function StatsScreen() {
               return <View key={`empty-${index}`} style={styles.emptyCell} />;
             }
             const dateKey = formatDateKey(year, month, day);
-            const hasRecord = Boolean(dailyRecords[dateKey]);
+            const hasRecord = recordDateKeys.includes(dateKey);
             const isSelected = selectedDate === dateKey;
             return (
               <Pressable
@@ -95,17 +97,26 @@ export default function StatsScreen() {
 
       <View style={styles.detailCard}>
         <Text style={styles.detailTitle}>{selectedDate} 记录</Text>
-        <Text style={styles.detailMeta}>喂养 {feedCount}次 · 大小便 {toiletCount}次</Text>
+        <Text style={styles.detailMeta}>记录 {feedCount}次 · 总时长 {totalDuration}分钟</Text>
         {selectedRecords.length === 0 ? (
           <Text style={styles.emptyText}>当天暂无记录</Text>
         ) : (
           selectedRecords.map((item, index) => (
-            <View key={`${item.time}-${index}`} style={styles.row}>
-              <Text style={styles.time}>{item.time}</Text>
-              <Text style={styles.rowIcon}>{item.icon}</Text>
+            <View key={`${item.id}-${index}`} style={styles.row}>
+              <Text style={styles.time}>
+                {new Date(item.created_at.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })}
+              </Text>
+              <Text style={styles.rowIcon}>{item.feed_type === '辅食' ? '🥣' : '🍼'}</Text>
               <View style={styles.rowTextWrap}>
-                <Text style={styles.rowTitle}>{item.type}</Text>
-                <Text style={styles.rowDesc}>{item.detail}</Text>
+                <Text style={styles.rowTitle}>{item.feed_type}</Text>
+                <Text style={styles.rowDesc}>
+                  {item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}
+                  {item.duration || 0}分钟{item.notes ? ` · ${item.notes}` : ''}
+                </Text>
               </View>
             </View>
           ))
