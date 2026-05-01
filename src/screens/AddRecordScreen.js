@@ -1,10 +1,21 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-const feedTypes = ['母乳', '配方奶', '混合喂养'];
+const feedTypes = ['母乳', '配方奶', '混合喂养', '辅食'];
 
 export default function AddRecordScreen() {
   const [feedType, setFeedType] = useState('母乳');
+  const [duration, setDuration] = useState('20');
+  const [notes, setNotes] = useState('');
+  const [solidFood, setSolidFood] = useState('');
+
+  const handleSave = () => {
+    if (feedType === '辅食' && !solidFood.trim()) {
+      Alert.alert('请补充内容', '请选择辅食记录时，请填写“辅食具体是什么”。');
+      return;
+    }
+    Alert.alert('保存成功', '已保存本次喂养记录。');
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -23,11 +34,28 @@ export default function AddRecordScreen() {
       <View style={styles.formCard}>
         <Text style={styles.label}>开始时间</Text>
         <TextInput value="2024年5月20日 08:00" editable={false} style={styles.input} />
+        {feedType === '辅食' ? (
+          <>
+            <Text style={styles.label}>辅食具体是什么</Text>
+            <TextInput
+              value={solidFood}
+              onChangeText={setSolidFood}
+              placeholder="例如：米粉、南瓜泥、苹果泥"
+              style={styles.input}
+            />
+          </>
+        ) : null}
         <Text style={styles.label}>时长（分钟）</Text>
-        <TextInput value="20" style={styles.input} keyboardType="numeric" />
+        <TextInput value={duration} onChangeText={setDuration} style={styles.input} keyboardType="numeric" />
         <Text style={styles.label}>备注</Text>
-        <TextInput placeholder="可记录宝宝状态…" style={[styles.input, styles.textarea]} multiline />
-        <Pressable style={styles.primaryButton}>
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="可记录宝宝状态…"
+          style={[styles.input, styles.textarea]}
+          multiline
+        />
+        <Pressable style={styles.primaryButton} onPress={handleSave}>
           <Text style={styles.primaryButtonText}>保存</Text>
         </Pressable>
       </View>
