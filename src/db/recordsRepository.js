@@ -243,6 +243,49 @@ export async function clearAllRecords() {
   await db.runAsync('DELETE FROM records;');
 }
 
+// ─── Baby Profile ───────────────────────────────────────────
+export async function initBabyProfile() {
+  await initDatabase();
+  const db = await getDatabase();
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS baby_profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      name TEXT NOT NULL DEFAULT '小宝贝',
+      gender TEXT DEFAULT '男',
+      birthday TEXT DEFAULT '2023-11-01',
+      avatar_emoji TEXT DEFAULT '👶',
+      next_checkup TEXT DEFAULT ''
+    );
+  `);
+  // Ensure default row exists
+  const row = await db.getFirstAsync('SELECT id FROM baby_profile WHERE id = 1;');
+  if (!row) {
+    await db.runAsync(
+      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup) VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '');`
+    );
+  }
+}
+
+export async function getBabyProfile() {
+  await initBabyProfile();
+  const db = await getDatabase();
+  const row = await db.getFirstAsync('SELECT * FROM baby_profile WHERE id = 1;');
+  return row;
+}
+
+export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup }) {
+  await initBabyProfile();
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=? WHERE id=1;`,
+    name?.trim() || '小宝贝',
+    gender || '男',
+    birthday || '2023-11-01',
+    avatarEmoji || '👶',
+    nextCheckup?.trim() || ''
+  );
+}
+
 export async function seedTestRecords() {
   await initDatabase();
   const db = await getDatabase();
