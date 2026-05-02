@@ -1,89 +1,85 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getBabyProfile } from '../db/recordsRepository';
-
-const growthStats = [
-  { icon: '🎂', label: '月龄', value: '-', bg: '#FCECEC' },
-  { icon: '⚖️', label: '体重', value: '-', bg: '#EEF3FF' },
-  { icon: '📏', label: '身高', value: '-', bg: '#F3FAEA' },
-  { icon: '🧠', label: '发育', value: '-', bg: '#FFF5E7' },
-];
-
-const quickActions = [
-  { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒' },
-  { icon: '📤', title: '数据导出', desc: '生成成长记录报告' },
-];
-
-const menuItems = [
-  { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱' },
-  { icon: '👨‍⚕️', title: '就诊记录', desc: '疫苗与体检信息' },
-  { icon: '❓', title: '关于我们', desc: '版本信息与反馈' },
-];
-
-function calcAge(birthday) {
-  if (!birthday) return '-';
-  const birth = new Date(birthday);
-  const now = new Date();
-  const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-  const days = Math.floor((now - birth) / (1000 * 60 * 60 * 24));
-  if (months < 0) return '-';
-  const m = months % 12;
-  const y = Math.floor(months / 12);
-  if (y === 0) return `${m}个月${days % 30}天`;
-  return `${y}岁${m}个月`;
-}
+import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
+import { getAllRecordsForExport, getBabyProfile } from '../db/recordsRepository';
 
 export default function MeScreen({ navigation }) {
-  const [profile, setProfile] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const { profile, reloadProfile } = useBabyProfile();
 
-  const loadProfile = useCallback(async () => {
-    try {
-      const p = await getBabyProfile();
-      setProfile(p);
-    } catch (err) {
-      console.error('Failed to load baby profile:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
-
-  // Re-load when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadProfile();
+      reloadProfile();
     });
     return unsubscribe;
-  }, [navigation, loadProfile]);
+  }, [navigation, reloadProfile]);
 
   async function onRefresh() {
-    setRefreshing(true);
-    await loadProfile();
-    setRefreshing(false);
+    await reloadProfile();
   }
+
+  const handleExport = async () => {
+    try {
+      const records = await getAllRecordsForExport();
+      if (records.length === 0) {
+        Alert.alert('无数据', '暂无任何记录可导出。');
+        return;
+      }
+      const baby = await getBabyProfile();
+      const lines = [
+        `宝宝成长记录`,
+        `姓名：${baby?.name || '小宝贝'}`,
+        `生日：${baby?.birthday || '-'}`,
+        `---`,
+      ];
+      for (const r of records) {
+        const date = r.created_at;
+        const type = r.record_type === 'vaccine' ? '💉疫苗' : r.feed_type;
+        const detail = r.record_type === 'vaccine'
+          ? [r.vaccine_dose, r.hospital, r.notes].filter(Boolean).join(' · ')
+          : [r.solid_food, r.duration ? `${r.duration}分钟` : '', r.notes].filter(Boolean).join(' · ');
+        lines.push(`${date}  ${type}  ${detail}`);
+      }
+      const text = lines.join('\n');
+      await Share.share({ message: text, title: `${baby?.name || '宝宝'}成长记录` });
+    } catch (err) {
+      Alert.alert('导出失败', err.message);
+    }
+  };
+
+  const quickActions = [
+    { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒' },
+    { icon: '📤', title: '数据导出', desc: '生成成长记录报告', onPress: handleExport },
+  ];
+
+  const menuItems = [
+    { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱' },
+    { icon: '👨‍⚕️', title: '就诊记录', desc: '疫苗与体检信息' },
+    { icon: '❓', title: '关于我们', desc: '版本信息与反馈' },
+  ];
 
   const name = profile?.name || '小宝贝';
   const gender = profile?.gender || '男';
   const birthday = profile?.birthday || '';
   const emoji = profile?.avatar_emoji || '👶';
   const nextCheckup = profile?.next_checkup || '';
+  const weight = profile?.weight || '';
+  const height = profile?.height || '';
+  const development = profile?.development || '良好';
   const age = calcAge(birthday);
 
   const stats = [
     { icon: '🎂', label: '月龄', value: age !== '-' ? age : '-', bg: '#FCECEC' },
-    { icon: '⚖️', label: '体重', value: profile?.weight || '-', bg: '#EEF3FF' },
-    { icon: '📏', label: '身高', value: profile?.height || '-', bg: '#F3FAEA' },
-    { icon: '🧠', label: '发育', value: profile?.development || '良好', bg: '#FFF5E7' },
+    { icon: '⚖️', label: '体重', value: weight ? `${weight}kg` : '-', bg: '#EEF3FF' },
+    { icon: '📏', label: '身高', value: height ? `${height}cm` : '-', bg: '#F3FAEA' },
+    { icon: '🧠', label: '发育', value: development || '-', bg: '#FFF5E7' },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} />}
       >
         <Text style={styles.title}>我的</Text>
         <TouchableOpacity
@@ -98,9 +94,7 @@ export default function MeScreen({ navigation }) {
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{name}</Text>
               <Text style={styles.profileMeta}>{gender === '男' ? '男宝宝' : '女宝宝'} · 生日 {birthday || '未设置'}</Text>
-              {nextCheckup ? (
-                <Text style={styles.profileMeta}>下一次体检：{nextCheckup}</Text>
-              ) : null}
+              {nextCheckup ? <Text style={styles.profileMeta}>下一次体检：{nextCheckup}</Text> : null}
             </View>
             <Text style={styles.editHint}>编辑 ›</Text>
           </View>
@@ -122,7 +116,12 @@ export default function MeScreen({ navigation }) {
 
         <View style={styles.quickCard}>
           {quickActions.map((item) => (
-            <View key={item.title} style={styles.quickRow}>
+            <TouchableOpacity
+              key={item.title}
+              style={styles.quickRow}
+              activeOpacity={0.7}
+              onPress={item.onPress}
+            >
               <View style={styles.rowMain}>
                 <Text style={styles.rowIcon}>{item.icon}</Text>
                 <View>
@@ -131,7 +130,7 @@ export default function MeScreen({ navigation }) {
                 </View>
               </View>
               <Text style={styles.rowArrow}>›</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
 

@@ -237,10 +237,57 @@ export async function updateDiaperRecord(id, { diaperType, stoolConsistency, not
   );
 }
 
+export async function addADRecord({ isTaken, dosage, recordedAt, notes }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const createdAt = formatLocalDateTime(new Date());
+  const dateTime = recordedAt?.trim() ? recordedAt.trim() : createdAt;
+  await db.runAsync(
+    `INSERT INTO records (
+      record_type, feed_type, duration, notes, solid_food, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?);`,
+    'feeding',
+    'AD',
+    isTaken ? 1 : 0,
+    isTaken ? '已服用' : '未服用',
+    dosage?.trim() || '',
+    dateTime
+  );
+}
+
+export async function updateADRecord(id, { isTaken, dosage, recordedAt, notes }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const dateTime = recordedAt?.trim() ? recordedAt.trim() : formatLocalDateTime(new Date());
+  await db.runAsync(
+    `UPDATE records
+     SET duration = ?, notes = ?, solid_food = ?, created_at = ?
+     WHERE id = ?;`,
+    isTaken ? 1 : 0,
+    isTaken ? '已服用' : '未服用',
+    dosage?.trim() || '',
+    dateTime,
+    id
+  );
+}
+
 export async function clearAllRecords() {
   await initDatabase();
   const db = await getDatabase();
   await db.runAsync('DELETE FROM records;');
+}
+
+export async function deleteRecord(id) {
+  await initDatabase();
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM records WHERE id = ?;', id);
+}
+
+export async function getAllRecordsForExport() {
+  await initDatabase();
+  const db = await getDatabase();
+  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY created_at ASC;');
+  return rows || [];
 }
 
 // ─── Baby Profile ───────────────────────────────────────────
@@ -254,14 +301,22 @@ export async function initBabyProfile() {
       gender TEXT DEFAULT '男',
       birthday TEXT DEFAULT '2023-11-01',
       avatar_emoji TEXT DEFAULT '👶',
-      next_checkup TEXT DEFAULT ''
+      next_checkup TEXT DEFAULT '',
+      weight TEXT DEFAULT '',
+      height TEXT DEFAULT '',
+      development TEXT DEFAULT '良好'
     );
   `);
+  // Migrate: add weight/height/development columns if missing (existing table)
+  await ensureColumn(db, 'weight', 'TEXT DEFAULT ""');
+  await ensureColumn(db, 'height', 'TEXT DEFAULT ""');
+  await ensureColumn(db, 'development', "TEXT DEFAULT '良好'");
   // Ensure default row exists
   const row = await db.getFirstAsync('SELECT id FROM baby_profile WHERE id = 1;');
   if (!row) {
     await db.runAsync(
-      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup) VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '');`
+      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup, weight, height, development)
+       VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '', '', '', '良好');`
     );
   }
 }
@@ -273,16 +328,19 @@ export async function getBabyProfile() {
   return row;
 }
 
-export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup }) {
+export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development }) {
   await initBabyProfile();
   const db = await getDatabase();
   await db.runAsync(
-    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=? WHERE id=1;`,
+    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=?, weight=?, height=?, development=? WHERE id=1;`,
     name?.trim() || '小宝贝',
     gender || '男',
     birthday || '2023-11-01',
     avatarEmoji || '👶',
-    nextCheckup?.trim() || ''
+    nextCheckup?.trim() || '',
+    weight?.trim() || '',
+    height?.trim() || '',
+    development || '良好'
   );
 }
 
