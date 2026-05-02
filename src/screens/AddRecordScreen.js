@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
-import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, getRecordById } from '../db/recordsRepository';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, getRecordById, deleteRecord } from '../db/recordsRepository';
 
 export default function AddRecordScreen() {
   const route = useRoute();
+  const navigation = useNavigation();
   const editRecordId = route.params?.recordId;
   const isEditMode = !!editRecordId;
 
@@ -263,6 +264,23 @@ export default function AddRecordScreen() {
           <Pressable style={[styles.primaryButton, saving && styles.primaryButtonDisabled]} onPress={handleSave} disabled={saving}>
             <Text style={styles.primaryButtonText}>{saving ? '保存中...' : '保存'}</Text>
           </Pressable>
+          {isEditMode && (
+            <Pressable style={styles.deleteButton} onPress={async () => {
+              Alert.alert('确认删除', '删除该条记录？', [
+                { text: '取消', style: 'cancel' },
+                {
+                  text: '删除',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await deleteRecord(editRecordId);
+                    navigation.goBack();
+                  },
+                },
+              ]);
+            }}>
+              <Text style={styles.deleteButtonText}>删除记录</Text>
+            </Pressable>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -295,4 +313,6 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: '#FF6E68', marginTop: 16, padding: 14, borderRadius: 26, alignItems: 'center' },
   primaryButtonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  deleteButton: { marginTop: 10, padding: 14, borderRadius: 26, alignItems: 'center', borderWidth: 1.5, borderColor: '#EF4444' },
+  deleteButtonText: { color: '#EF4444', fontSize: 16, fontWeight: '700' },
 });

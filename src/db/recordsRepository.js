@@ -243,6 +243,19 @@ export async function clearAllRecords() {
   await db.runAsync('DELETE FROM records;');
 }
 
+export async function deleteRecord(id) {
+  await initDatabase();
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM records WHERE id = ?;', id);
+}
+
+export async function getAllRecordsForExport() {
+  await initDatabase();
+  const db = await getDatabase();
+  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY created_at ASC;');
+  return rows || [];
+}
+
 // ─── Baby Profile ───────────────────────────────────────────
 export async function initBabyProfile() {
   await initDatabase();
