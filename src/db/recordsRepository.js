@@ -169,3 +169,126 @@ export async function getSolidFoodRecordsByMonth(year, month) {
   );
   return rows || [];
 }
+
+export async function getRecordsByMonth(year, month) {
+  await initDatabase();
+  const db = await getDatabase();
+  const monthPrefix = `${year}-${pad(month)}`;
+  const rows = await db.getAllAsync(
+    `SELECT * FROM records
+     WHERE strftime('%Y-%m', created_at) = ?
+     ORDER BY created_at ASC;`,
+    monthPrefix
+  );
+  return rows || [];
+}
+
+export async function getRecordById(id) {
+  await initDatabase();
+  const db = await getDatabase();
+  const row = await db.getFirstAsync('SELECT * FROM records WHERE id = ?;', id);
+  return row;
+}
+
+export async function updateRecord(id, { feedType, duration, notes, solidFood, diaperType, stoolConsistency }) {
+  await initDatabase();
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE records
+     SET feed_type = ?, duration = ?, notes = ?, solid_food = ?
+     WHERE id = ?;`,
+    feedType,
+    Number.parseInt(duration, 10) || 0,
+    notes?.trim() || '',
+    solidFood?.trim() || '',
+    id
+  );
+}
+
+export async function updateVaccineRecord(id, { vaccineName, vaccineDose, hospital, notes, vaccinatedAt }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const dateTime = vaccinatedAt?.trim() ? vaccinatedAt.trim() : new Date().toLocaleString('zh-CN');
+  await db.runAsync(
+    `UPDATE records
+     SET feed_type = ?, vaccine_dose = ?, hospital = ?, notes = ?, vaccinated_at = ?
+     WHERE id = ?;`,
+    vaccineName?.trim() || '未命名疫苗',
+    vaccineDose?.trim() || '',
+    hospital?.trim() || '',
+    notes?.trim() || '',
+    dateTime,
+    id
+  );
+}
+
+export async function updateDiaperRecord(id, { diaperType, stoolConsistency, notes }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const diaperText = diaperType || '';
+  await db.runAsync(
+    `UPDATE records
+     SET feed_type = ?, solid_food = ?, notes = ?
+     WHERE id = ?;`,
+    diaperText,
+    stoolConsistency || '',
+    notes?.trim() || '',
+    id
+  );
+}
+
+export async function clearAllRecords() {
+  await initDatabase();
+  const db = await getDatabase();
+  await db.runAsync('DELETE FROM records;');
+}
+
+export async function seedTestRecords() {
+  await initDatabase();
+  const db = await getDatabase();
+
+  const records = [
+    { date: '2026-04-01', food: '米粉' },
+    { date: '2026-04-02', food: '米粉' },
+    { date: '2026-04-03', food: '米粉' },
+    { date: '2026-04-04', food: '米粉' },
+    { date: '2026-04-05', food: '米粉' },
+    { date: '2026-04-06', food: '米粉' },
+    { date: '2026-04-07', food: '米粉' },
+    { date: '2026-04-08', food: '米粉' },
+    { date: '2026-04-09', food: '米粉' },
+    { date: '2026-04-10', food: '亚麻籽油' },
+    { date: '2026-04-11', food: '亚麻籽油' },
+    { date: '2026-04-12', food: '亚麻籽油' },
+    { date: '2026-04-13', food: '亚麻籽油' },
+    { date: '2026-04-14', food: '亚麻籽油' },
+    { date: '2026-04-15', food: '亚麻籽油' },
+    { date: '2026-04-16', food: '菠菜' },
+    { date: '2026-04-17', food: '菠菜' },
+    { date: '2026-04-18', food: '菠菜' },
+    { date: '2026-04-19', food: '南瓜' },
+    { date: '2026-04-20', food: '南瓜' },
+    { date: '2026-04-21', food: '南瓜' },
+    { date: '2026-04-22', food: '山药' },
+    { date: '2026-04-23', food: '山药' },
+    { date: '2026-04-24', food: '山药' },
+    { date: '2026-04-25', food: '猪肉' },
+    { date: '2026-04-26', food: '猪肉' },
+    { date: '2026-04-27', food: '猪肉' },
+    { date: '2026-04-28', food: '猪肉' },
+    { date: '2026-04-29', food: '山药' },
+    { date: '2026-04-30', food: '山药' },
+    { date: '2026-05-01', food: '菠菜' },
+    { date: '2026-05-02', food: '菠菜' },
+  ];
+
+  for (const item of records) {
+    await db.runAsync(
+      `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at)
+       VALUES (?, ?, ?, ?, ?, ?);`,
+      'feeding', '辅食', 15, '', item.food, `${item.date} 10:00:00`
+    );
+  }
+
+  return records.length;
+}

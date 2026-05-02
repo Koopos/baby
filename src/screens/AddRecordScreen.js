@@ -1,20 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { addRecord, addVaccineRecord } from '../db/recordsRepository';
+import { useRoute } from '@react-navigation/native';
+import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, getRecordById } from '../db/recordsRepository';
 
 export default function AddRecordScreen() {
+  const route = useRoute();
+  const editRecordId = route.params?.recordId;
+  const isEditMode = !!editRecordId;
+
   const [recordType, setRecordType] = useState('母乳');
   const isVaccine = recordType === '疫苗';
+  const isDiaper = recordType === '大小便';
 
   const [duration, setDuration] = useState('');
   const [solidFood, setSolidFood] = useState('');
+  const [formulaAmount, setFormulaAmount] = useState('');
+  const [diaperType, setDiaperType] = useState('');
+  const [stoolConsistency, setStoolConsistency] = useState('');
   const [vaccineName, setVaccineName] = useState('');
   const [vaccineDose, setVaccineDose] = useState('');
   const [hospital, setHospital] = useState('');
   const [vaccinatedAt, setVaccinatedAt] = useState(new Date().toLocaleString('zh-CN'));
+  const [recordedAt, setRecordedAt] = useState(new Date().toLocaleString('zh-CN'));
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const loadRecord = async () => {
+      if (!editRecordId) return;
+      const record = await getRecordById(editRecordId);
+      if (!record) return;
+
+      if (record.record_type === 'vaccine') {
+        setRecordType('疫苗');
+        setVaccineName(record.feed_type || '');
+        setVaccineDose(record.vaccine_dose || '');
+        setHospital(record.hospital || '');
+        setVaccinatedAt(record.vaccinated_at || record.created_at);
+      } else if (record.feed_type === '小便' || record.feed_type === '大便' || record.feed_type === '两者都有') {
+        setRecordType('大小便');
+        setDiaperType(record.feed_type || '');
+        setStoolConsistency(record.solid_food || '');
+      } else {
+        setRecordType(record.feed_type || '母乳');
+        setDuration(String(record.duration || 0));
+        setSolidFood(record.solid_food || '');
+        setFormulaAmount(record.solid_food || '');
+      }
+      setRecordedAt(record.created_at || new Date().toLocaleString('zh-CN'));
+      setNotes(record.notes || '');
+    };
+    loadRecord();
+  }, [editRecordId]);
 
   const handleSave = async () => {
     if (isVaccine) {
@@ -31,23 +69,38 @@ export default function AddRecordScreen() {
     try {
       setSaving(true);
       if (isVaccine) {
-        await addVaccineRecord({ vaccineName, vaccineDose, hospital, notes, vaccinatedAt });
+        if (isEditMode) {
+          await updateVaccineRecord(editRecordId, { vaccineName, vaccineDose, hospital, notes, vaccinatedAt });
+        } else {
+          await addVaccineRecord({ vaccineName, vaccineDose, hospital, notes, vaccinatedAt });
+        }
+      } else if (isDiaper) {
+        if (isEditMode) {
+          await updateDiaperRecord(editRecordId, { diaperType, stoolConsistency, notes });
+        } else {
+          await addRecord({ feedType: recordType, duration: '0', notes, solidFood: stoolConsistency, diaperType, stoolConsistency, recordedAt });
+        }
       } else {
-        await addRecord({
-          feedType: recordType,
-          duration,
-          notes,
-          solidFood,
-        });
+        if (isEditMode) {
+          await updateRecord(editRecordId, { feedType: recordType, duration, notes, solidFood: recordType === '配方奶' ? formulaAmount : solidFood });
+        } else {
+          await addRecord({ feedType: recordType, duration, notes, solidFood: recordType === '配方奶' ? formulaAmount : solidFood, diaperType, stoolConsistency, recordedAt });
+        }
       }
 
-      setDuration('');
-      setSolidFood('');
-      setVaccineName('');
-      setVaccineDose('');
-      setHospital('');
-      setVaccinatedAt(new Date().toLocaleString('zh-CN'));
-      setNotes('');
+      if (!isEditMode) {
+        setDuration('');
+        setSolidFood('');
+        setFormulaAmount('');
+        setDiaperType('');
+        setStoolConsistency('');
+        setVaccineName('');
+        setVaccineDose('');
+        setHospital('');
+        setRecordedAt(new Date().toLocaleString('zh-CN'));
+        setVaccinatedAt(new Date().toLocaleString('zh-CN'));
+        setNotes('');
+      }
       Alert.alert('保存成功', '已保存到本地 SQLite。');
     } catch (error) {
       Alert.alert('保存失败', '本地保存失败，请稍后再试。');
@@ -59,14 +112,18 @@ export default function AddRecordScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>添加记录</Text>
+        <Text style={styles.title}>{isEditMode ? '编辑记录' : '添加记录'}</Text>
         <View style={styles.formCard}>
           <Text style={styles.label}>记录类型</Text>
           <View style={styles.typeRow}>
-            {['母乳', '配方奶', '辅食', '疫苗'].map((item) => {
+            {['母乳', '配方奶', '辅食', '疫苗', '大小便'].map((item) => {
               const active = item === recordType;
               return (
-                <Pressable key={item} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setRecordType(item)}>
+                <Pressable
+                  key={item}
+                  style={[styles.typeChip, active && styles.typeChipActive, isEditMode && styles.typeChipDisabled]}
+                  onPress={() => !isEditMode && setRecordType(item)}
+                >
                   <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{item}</Text>
                 </Pressable>
               );
@@ -104,18 +161,66 @@ export default function AddRecordScreen() {
                 style={styles.input}
               />
             </>
+          ) : isDiaper ? (
+            <>
+              <Text style={styles.label}>类型</Text>
+              <View style={styles.typeRow}>
+                {['小便', '大便', '两者都有'].map((item) => {
+                  const active = item === diaperType;
+                  return (
+                    <Pressable key={item} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setDiaperType(item)}>
+                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{item}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {(diaperType === '大便' || diaperType === '两者都有') && (
+                <>
+                  <Text style={styles.label}>大便形态</Text>
+                  <View style={styles.typeRow}>
+                    {['正常', '偏硬', '偏软', '稀水'].map((item) => {
+                      const active = item === stoolConsistency;
+                      return (
+                        <Pressable key={item} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setStoolConsistency(item)}>
+                          <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{item}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+            </>
           ) : (
             <>
-              <Text style={styles.label}>时长（分钟）</Text>
-              <TextInput
-                value={duration}
-                onChangeText={setDuration}
-                placeholder="例如：20"
-                keyboardType="number-pad"
-                style={styles.input}
-              />
-              {recordType === '辅食' ? (
+              {recordType === '配方奶' ? (
                 <>
+                  <Text style={styles.label}>时长（分钟）</Text>
+                  <TextInput
+                    value={duration}
+                    onChangeText={setDuration}
+                    placeholder="例如：20"
+                    keyboardType="number-pad"
+                    style={styles.input}
+                  />
+                  <Text style={styles.label}>毫升数</Text>
+                  <TextInput
+                    value={formulaAmount}
+                    onChangeText={setFormulaAmount}
+                    placeholder="例如：120"
+                    keyboardType="number-pad"
+                    style={styles.input}
+                  />
+                </>
+              ) : recordType === '辅食' ? (
+                <>
+                  <Text style={styles.label}>时长（分钟）</Text>
+                  <TextInput
+                    value={duration}
+                    onChangeText={setDuration}
+                    placeholder="例如：20"
+                    keyboardType="number-pad"
+                    style={styles.input}
+                  />
                   <Text style={styles.label}>辅食内容</Text>
                   <TextInput
                     value={solidFood}
@@ -124,9 +229,28 @@ export default function AddRecordScreen() {
                     style={styles.input}
                   />
                 </>
-              ) : null}
+              ) : (
+                <>
+                  <Text style={styles.label}>时长（分钟）</Text>
+                  <TextInput
+                    value={duration}
+                    onChangeText={setDuration}
+                    placeholder="例如：20"
+                    keyboardType="number-pad"
+                    style={styles.input}
+                  />
+                </>
+              )}
             </>
           )}
+
+          <Text style={styles.label}>记录时间</Text>
+          <TextInput
+            value={recordedAt}
+            onChangeText={setRecordedAt}
+            placeholder="例如：2026-05-01 09:30:00"
+            style={styles.input}
+          />
 
           <Text style={styles.label}>备注</Text>
           <TextInput
@@ -163,6 +287,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   typeChipActive: { backgroundColor: '#FF6E68', borderColor: '#FF6E68' },
+  typeChipDisabled: { opacity: 0.5 },
   typeChipText: { fontSize: 14, color: '#666', fontWeight: '600' },
   typeChipTextActive: { color: '#fff' },
   input: { borderWidth: 1, borderColor: '#eee', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
