@@ -237,6 +237,40 @@ export async function updateDiaperRecord(id, { diaperType, stoolConsistency, not
   );
 }
 
+export async function addADRecord({ isTaken, dosage, recordedAt, notes }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const createdAt = formatLocalDateTime(new Date());
+  const dateTime = recordedAt?.trim() ? recordedAt.trim() : createdAt;
+  await db.runAsync(
+    `INSERT INTO records (
+      record_type, feed_type, duration, notes, solid_food, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?);`,
+    'feeding',
+    'AD',
+    isTaken ? 1 : 0,
+    isTaken ? '已服用' : '未服用',
+    dosage?.trim() || '',
+    dateTime
+  );
+}
+
+export async function updateADRecord(id, { isTaken, dosage, recordedAt, notes }) {
+  await initDatabase();
+  const db = await getDatabase();
+  const dateTime = recordedAt?.trim() ? recordedAt.trim() : formatLocalDateTime(new Date());
+  await db.runAsync(
+    `UPDATE records
+     SET duration = ?, notes = ?, solid_food = ?, created_at = ?
+     WHERE id = ?;`,
+    isTaken ? 1 : 0,
+    isTaken ? '已服用' : '未服用',
+    dosage?.trim() || '',
+    dateTime,
+    id
+  );
+}
+
 export async function clearAllRecords() {
   await initDatabase();
   const db = await getDatabase();

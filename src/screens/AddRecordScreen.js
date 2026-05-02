@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, getRecordById, deleteRecord } from '../db/recordsRepository';
+import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, addADRecord, updateADRecord, getRecordById, deleteRecord } from '../db/recordsRepository';
 
 export default function AddRecordScreen() {
   const route = useRoute();
@@ -13,6 +13,7 @@ export default function AddRecordScreen() {
   const [recordType, setRecordType] = useState('母乳');
   const isVaccine = recordType === '疫苗';
   const isDiaper = recordType === '大小便';
+  const isAD = recordType === 'AD';
 
   const [duration, setDuration] = useState('');
   const [solidFood, setSolidFood] = useState('');
@@ -25,6 +26,8 @@ export default function AddRecordScreen() {
   const [vaccinatedAt, setVaccinatedAt] = useState(new Date().toLocaleString('zh-CN'));
   const [recordedAt, setRecordedAt] = useState(new Date().toLocaleString('zh-CN'));
   const [notes, setNotes] = useState('');
+  const [adTaken, setAdTaken] = useState(true);
+  const [adDosage, setAdDosage] = useState('一粒');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -43,6 +46,10 @@ export default function AddRecordScreen() {
         setRecordType('大小便');
         setDiaperType(record.feed_type || '');
         setStoolConsistency(record.solid_food || '');
+      } else if (record.feed_type === 'AD') {
+        setRecordType('AD');
+        setAdTaken(record.duration === 1);
+        setAdDosage(record.solid_food || '一粒');
       } else {
         setRecordType(record.feed_type || '母乳');
         setDuration(String(record.duration || 0));
@@ -81,6 +88,12 @@ export default function AddRecordScreen() {
         } else {
           await addRecord({ feedType: recordType, duration: '0', notes, solidFood: stoolConsistency, diaperType, stoolConsistency, recordedAt });
         }
+      } else if (isAD) {
+        if (isEditMode) {
+          await updateADRecord(editRecordId, { isTaken: adTaken, dosage: adDosage, recordedAt, notes });
+        } else {
+          await addADRecord({ isTaken: adTaken, dosage: adDosage, recordedAt, notes });
+        }
       } else {
         if (isEditMode) {
           await updateRecord(editRecordId, { feedType: recordType, duration, notes, solidFood: recordType === '配方奶' ? formulaAmount : solidFood });
@@ -98,9 +111,11 @@ export default function AddRecordScreen() {
         setVaccineName('');
         setVaccineDose('');
         setHospital('');
+setVaccinatedAt(new Date().toLocaleString('zh-CN'));
         setRecordedAt(new Date().toLocaleString('zh-CN'));
-        setVaccinatedAt(new Date().toLocaleString('zh-CN'));
         setNotes('');
+        setAdTaken(true);
+        setAdDosage('一粒');
       }
       Alert.alert('保存成功', '已保存到本地 SQLite。');
     } catch (error) {
@@ -117,7 +132,7 @@ export default function AddRecordScreen() {
         <View style={styles.formCard}>
           <Text style={styles.label}>记录类型</Text>
           <View style={styles.typeRow}>
-            {['母乳', '配方奶', '辅食', '疫苗', '大小便'].map((item) => {
+            {['母乳', '配方奶', '辅食', '疫苗', '大小便', 'AD'].map((item) => {
               const active = item === recordType;
               return (
                 <Pressable
@@ -183,6 +198,35 @@ export default function AddRecordScreen() {
                       const active = item === stoolConsistency;
                       return (
                         <Pressable key={item} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setStoolConsistency(item)}>
+                          <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{item}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+            </>
+          ) : isAD ? (
+            <>
+              <Text style={styles.label}>今日是否服用 AD</Text>
+              <View style={styles.typeRow}>
+                {[['是', true], ['否', false]].map(([label, val]) => {
+                  const active = adTaken === val;
+                  return (
+                    <Pressable key={label} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setAdTaken(val)}>
+                      <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {adTaken && (
+                <>
+                  <Text style={styles.label}>剂量</Text>
+                  <View style={styles.typeRow}>
+                    {['一粒', '两粒'].map((item) => {
+                      const active = item === adDosage;
+                      return (
+                        <Pressable key={item} style={[styles.typeChip, active && styles.typeChipActive]} onPress={() => setAdDosage(item)}>
                           <Text style={[styles.typeChipText, active && styles.typeChipTextActive]}>{item}</Text>
                         </Pressable>
                       );

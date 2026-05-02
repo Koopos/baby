@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 function getRecordIcon(feedType, recordType) {
   if (recordType === 'vaccine') return '💉';
+  if (feedType === 'AD') return '💊';
   if (feedType === '辅食') return '🥣';
   if (feedType === '小便' || feedType === '大便' || feedType === '两者都有') return '🧷';
   return '🍼';
@@ -39,6 +40,13 @@ export default function RecordRow({ item, showTime = true }) {
       const parts = [
         item.solid_food || null, // stool_consistency stored here
         item.notes || null,
+      ].filter(Boolean);
+      return parts.join(' · ') || '记录';
+    }
+    if (item.feed_type === 'AD') {
+      const parts = [
+        item.notes || null, // '已服用' or '未服用'
+        item.duration === 1 ? item.solid_food : null, // dosage if taken
       ].filter(Boolean);
       return parts.join(' · ') || '记录';
     }
