@@ -254,14 +254,22 @@ export async function initBabyProfile() {
       gender TEXT DEFAULT '男',
       birthday TEXT DEFAULT '2023-11-01',
       avatar_emoji TEXT DEFAULT '👶',
-      next_checkup TEXT DEFAULT ''
+      next_checkup TEXT DEFAULT '',
+      weight TEXT DEFAULT '',
+      height TEXT DEFAULT '',
+      development TEXT DEFAULT '良好'
     );
   `);
+  // Migrate: add weight/height/development columns if missing (existing table)
+  await ensureColumn(db, 'weight', 'TEXT DEFAULT ""');
+  await ensureColumn(db, 'height', 'TEXT DEFAULT ""');
+  await ensureColumn(db, 'development', "TEXT DEFAULT '良好'");
   // Ensure default row exists
   const row = await db.getFirstAsync('SELECT id FROM baby_profile WHERE id = 1;');
   if (!row) {
     await db.runAsync(
-      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup) VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '');`
+      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup, weight, height, development)
+       VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '', '', '', '良好');`
     );
   }
 }
@@ -273,16 +281,19 @@ export async function getBabyProfile() {
   return row;
 }
 
-export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup }) {
+export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development }) {
   await initBabyProfile();
   const db = await getDatabase();
   await db.runAsync(
-    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=? WHERE id=1;`,
+    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=?, weight=?, height=?, development=? WHERE id=1;`,
     name?.trim() || '小宝贝',
     gender || '男',
     birthday || '2023-11-01',
     avatarEmoji || '👶',
-    nextCheckup?.trim() || ''
+    nextCheckup?.trim() || '',
+    weight?.trim() || '',
+    height?.trim() || '',
+    development || '良好'
   );
 }
 

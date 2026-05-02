@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getRecordsByMonth, seedTestRecords, clearAllRecords } from '../db/recordsRepository';
+import RecordRow from '../components/RecordRow';
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -24,8 +25,23 @@ export default function StatsScreen() {
   const [recordDateKeys, setRecordDateKeys] = useState([]);
   const [solidFoodByDate, setSolidFoodByDate] = useState({});
   const [vaccineCountByDate, setVaccineCountByDate] = useState({});
+  const [showDevMenu, setShowDevMenu] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const titleTapCount = useRef(0);
+  const titleTapTimer = useRef(null);
+
+  const handleTitleTap = () => {
+    titleTapCount.current += 1;
+    clearTimeout(titleTapTimer.current);
+    titleTapTimer.current = setTimeout(() => {
+      titleTapCount.current = 0;
+    }, 2000);
+    if (titleTapCount.current >= 5) {
+      titleTapCount.current = 0;
+      setShowDevMenu((v) => !v);
+    }
+  };
 
   const handleSeed = async () => {
     setIsSeeding(true);
@@ -76,7 +92,7 @@ export default function StatsScreen() {
   };
 
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
     const loadData = async () => {
       const [allDateKeys, dayRecords, allMonthRecords] = await Promise.all([
         getRecordDateKeys(),
@@ -95,7 +111,7 @@ export default function StatsScreen() {
         }
       }
 
-      if (mounted) {
+      if (!cancelled) {
         setRecordDateKeys(allDateKeys);
         setSelectedRecords(dayRecords);
         setSolidFoodByDate(solidFoodMap);
@@ -104,7 +120,7 @@ export default function StatsScreen() {
     };
     loadData();
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, [viewMonth, selectedDate, viewYear]);
 
@@ -136,16 +152,21 @@ export default function StatsScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>日历记录</Text>
-          <View style={styles.headerButtons}>
-            <Pressable style={styles.seedButton} onPress={handleSeed} disabled={isSeeding}>
-              <Text style={styles.seedButtonText}>{isSeeding ? '导入中...' : '导入测试数据'}</Text>
-            </Pressable>
-            <Pressable style={[styles.seedButton, styles.clearButton]} onPress={handleClear} disabled={isClearing}>
-              <Text style={styles.seedButtonText}>{isClearing ? '清空中...' : '清空记录'}</Text>
-            </Pressable>
-          </View>
+          <Pressable onPress={handleTitleTap}>
+            <Text style={styles.title}>日历记录</Text>
+          </Pressable>
+          {showDevMenu && (
+            <View style={styles.headerButtons}>
+              <Pressable style={styles.seedButton} onPress={handleSeed} disabled={isSeeding}>
+                <Text style={styles.seedButtonText}>{isSeeding ? '导入中...' : '导入测试数据'}</Text>
+              </Pressable>
+              <Pressable style={[styles.seedButton, styles.clearButton]} onPress={handleClear} disabled={isClearing}>
+                <Text style={styles.seedButtonText}>{isClearing ? '清空中...' : '清空记录'}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
+
         <View style={styles.calendarCard}>
           <View style={styles.monthHeader}>
             <Pressable style={styles.monthNavButton} onPress={handlePreviousMonth}>
@@ -170,6 +191,7 @@ export default function StatsScreen() {
               const hasRecord = recordDateKeys.includes(dateKey);
               const isSelected = selectedDate === dateKey;
               const solidFoodLabel = solidFoodByDate[dateKey];
+              const vaccineN = vaccineCountByDate[dateKey] || 0;
               return (
                 <Pressable
                   key={dateKey}
@@ -179,14 +201,16 @@ export default function StatsScreen() {
                   <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
                   {solidFoodLabel && (
                     <View style={[styles.solidFoodTag, isSelected && styles.solidFoodTagSelected]}>
-                      <Text style={[styles.solidFoodText, isSelected && styles.solidFoodTextSelected]}>{solidFoodLabel}</Text>
+                      <Text style={[styles.solidFoodText, isSelected && styles.solidFoodTextSelected]}>
+                        {String(solidFoodLabel).substring(0, 4)}
+                      </Text>
                     </View>
                   )}
-                  {vaccineCount > 0 && (
-                    <View style={styles.dotsContainer}>
-                      {Array.from({ length: vaccineCount }).map((_, i) => (
-                        <View key={`vaccine-${i}`} style={[styles.dot, styles.vaccineDot]} />
-                      ))}
+                  {vaccineN > 0 && (
+                    <View style={[styles.dotBadge, isSelected && styles.dotBadgeSelected]}>
+                      <Text style={[styles.dotBadgeText, isSelected && styles.dotBadgeTextSelected]}>
+                        💉{vaccineN}
+                      </Text>
                     </View>
                   )}
                 </Pressable>
@@ -201,31 +225,12 @@ export default function StatsScreen() {
           {selectedRecords.length === 0 ? (
             <Text style={styles.emptyText}>当天暂无记录</Text>
           ) : (
-            selectedRecords.map((item, index) => (
-              <Pressable
-                key={`${item.id}-${index}`}
-                style={styles.row}
+            selectedRecords.map((item) => (
+              <RecordRow
+                key={item.id}
+                item={item}
                 onPress={() => navigation.navigate('AddRecord', { recordId: item.id })}
-              >
-                <Text style={styles.time}>
-                  {new Date(item.created_at.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}
-                </Text>
-                <Text style={styles.rowIcon}>
-                  {item.record_type === 'vaccine' ? '💉' : item.feed_type === '辅食' ? '🥣' : '🍼'}
-                </Text>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>{item.feed_type}</Text>
-                  <Text style={styles.rowDesc}>
-                    {item.record_type === 'vaccine'
-                      ? `${item.vaccine_dose ? `${item.vaccine_dose} · ` : ''}${item.hospital || '疫苗接种'}${item.notes ? ` · ${item.notes}` : ''}`
-                      : `${item.feed_type === '辅食' && item.solid_food ? `${item.solid_food} · ` : ''}${item.duration || 0}分钟${item.notes ? ` · ${item.notes}` : ''}`}
-                  </Text>
-                </View>
-              </Pressable>
+              />
             ))
           )}
         </View>
@@ -237,7 +242,7 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   content: { padding: 16, paddingBottom: 30, backgroundColor: '#FAFAFA' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 },
   headerButtons: { flexDirection: 'row', gap: 8 },
   title: { fontSize: 28, fontWeight: '700', color: '#222' },
   seedButton: { backgroundColor: '#FF6E68', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
@@ -264,24 +269,16 @@ const styles = StyleSheet.create({
   dayCellSelected: { backgroundColor: '#FFF5F5' },
   dayText: { color: '#333', fontWeight: '600' },
   dayTextSelected: { color: '#FF6E68' },
-  dotsContainer: { flexDirection: 'row', justifyContent: 'center', gap: 2, marginTop: 4 },
-  dot: { width: 5, height: 5, borderRadius: 3 },
-  solidDot: { backgroundColor: '#FF6E68' },
   solidFoodTag: { backgroundColor: '#FF6E68', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1, marginTop: 2 },
   solidFoodTagSelected: { backgroundColor: '#FF6E68' },
   solidFoodText: { color: '#fff', fontSize: 9, fontWeight: '600' },
   solidFoodTextSelected: { color: '#fff' },
-  solidDotSelected: { backgroundColor: '#fff' },
-  vaccineDot: { backgroundColor: '#10B981' },
-  vaccineDotSelected: { backgroundColor: '#E5F9F3' },
+  dotBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  dotBadgeSelected: {},
+  dotBadgeText: { fontSize: 9, color: '#10B981', fontWeight: '700' },
+  dotBadgeTextSelected: { color: '#10B981' },
   detailCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14 },
   detailTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4, color: '#222' },
   detailMeta: { color: '#666', marginBottom: 12 },
   emptyText: { color: '#999', paddingVertical: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingVertical: 4 },
-  time: { width: 56, color: '#555', fontWeight: '600' },
-  rowIcon: { width: 26, fontSize: 18 },
-  rowTextWrap: { flex: 1 },
-  rowTitle: { fontSize: 15, fontWeight: '600', color: '#222' },
-  rowDesc: { color: '#777', marginTop: 2 },
 });

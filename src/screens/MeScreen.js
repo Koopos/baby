@@ -1,14 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getBabyProfile } from '../db/recordsRepository';
-
-const growthStats = [
-  { icon: '🎂', label: '月龄', value: '-', bg: '#FCECEC' },
-  { icon: '⚖️', label: '体重', value: '-', bg: '#EEF3FF' },
-  { icon: '📏', label: '身高', value: '-', bg: '#F3FAEA' },
-  { icon: '🧠', label: '发育', value: '-', bg: '#FFF5E7' },
-];
+import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 
 const quickActions = [
   { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒' },
@@ -21,48 +14,18 @@ const menuItems = [
   { icon: '❓', title: '关于我们', desc: '版本信息与反馈' },
 ];
 
-function calcAge(birthday) {
-  if (!birthday) return '-';
-  const birth = new Date(birthday);
-  const now = new Date();
-  const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-  const days = Math.floor((now - birth) / (1000 * 60 * 60 * 24));
-  if (months < 0) return '-';
-  const m = months % 12;
-  const y = Math.floor(months / 12);
-  if (y === 0) return `${m}个月${days % 30}天`;
-  return `${y}岁${m}个月`;
-}
-
 export default function MeScreen({ navigation }) {
-  const [profile, setProfile] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const { profile, reloadProfile } = useBabyProfile();
 
-  const loadProfile = useCallback(async () => {
-    try {
-      const p = await getBabyProfile();
-      setProfile(p);
-    } catch (err) {
-      console.error('Failed to load baby profile:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
-
-  // Re-load when screen comes into focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      loadProfile();
+      reloadProfile();
     });
     return unsubscribe;
-  }, [navigation, loadProfile]);
+  }, [navigation, reloadProfile]);
 
   async function onRefresh() {
-    setRefreshing(true);
-    await loadProfile();
-    setRefreshing(false);
+    await reloadProfile();
   }
 
   const name = profile?.name || '小宝贝';
@@ -70,20 +33,23 @@ export default function MeScreen({ navigation }) {
   const birthday = profile?.birthday || '';
   const emoji = profile?.avatar_emoji || '👶';
   const nextCheckup = profile?.next_checkup || '';
+  const weight = profile?.weight || '';
+  const height = profile?.height || '';
+  const development = profile?.development || '良好';
   const age = calcAge(birthday);
 
   const stats = [
     { icon: '🎂', label: '月龄', value: age !== '-' ? age : '-', bg: '#FCECEC' },
-    { icon: '⚖️', label: '体重', value: profile?.weight || '-', bg: '#EEF3FF' },
-    { icon: '📏', label: '身高', value: profile?.height || '-', bg: '#F3FAEA' },
-    { icon: '🧠', label: '发育', value: profile?.development || '良好', bg: '#FFF5E7' },
+    { icon: '⚖️', label: '体重', value: weight ? `${weight}kg` : '-', bg: '#EEF3FF' },
+    { icon: '📏', label: '身高', value: height ? `${height}cm` : '-', bg: '#F3FAEA' },
+    { icon: '🧠', label: '发育', value: development || '-', bg: '#FFF5E7' },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} />}
       >
         <Text style={styles.title}>我的</Text>
         <TouchableOpacity
@@ -98,9 +64,7 @@ export default function MeScreen({ navigation }) {
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{name}</Text>
               <Text style={styles.profileMeta}>{gender === '男' ? '男宝宝' : '女宝宝'} · 生日 {birthday || '未设置'}</Text>
-              {nextCheckup ? (
-                <Text style={styles.profileMeta}>下一次体检：{nextCheckup}</Text>
-              ) : null}
+              {nextCheckup ? <Text style={styles.profileMeta}>下一次体检：{nextCheckup}</Text> : null}
             </View>
             <Text style={styles.editHint}>编辑 ›</Text>
           </View>

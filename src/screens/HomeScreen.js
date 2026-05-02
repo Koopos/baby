@@ -3,6 +3,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordsByDate } from '../db/recordsRepository';
+import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
+import RecordRow from '../components/RecordRow';
 
 function getDateKey(date) {
   const year = date.getFullYear();
@@ -11,36 +13,42 @@ function getDateKey(date) {
   return `${year}-${month}-${day}`;
 }
 
-function getTimeLabel(datetime) {
-  return new Date(datetime.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
-
-function getRecordIcon(feedType) {
-  return feedType === '疫苗' ? '💉' : feedType === '辅食' ? '🥣' : '🍼';
+function getWeekdayName(date) {
+  const map = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return map[date.getDay()];
 }
 
 export default function HomeScreen() {
   const [records, setRecords] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const { profile, reloadProfile } = useBabyProfile();
 
   useFocusEffect(
     useCallback(() => {
-      let mounted = true;
+      let cancelled = false;
       const loadTodayRecords = async () => {
         const todayRecords = await getRecordsByDate(getDateKey(new Date()));
-        if (mounted) {
+        if (!cancelled) {
           setRecords(todayRecords);
         }
       };
       loadTodayRecords();
       return () => {
-        mounted = false;
+        cancelled = true;
       };
     }, [])
   );
+
+  const today = new Date();
+  const dateKey = getDateKey(today);
+  const weekday = getWeekdayName(today);
+  const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日（${weekday}）`;
+
+  const name = profile?.name || '小宝贝';
+  const gender = profile?.gender || '男';
+  const birthday = profile?.birthday || '';
+  const emoji = profile?.avatar_emoji || '👶';
+  const age = calcAge(birthday);
 
   const summary = useMemo(() => {
     const vaccineRecords = records.filter((item) => item.record_type === 'vaccine');
@@ -63,8 +71,8 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>宝宝日常记录</Text>
         <View style={styles.profileCard}>
-          <Text style={styles.profileName}>小宝贝 ♂</Text>
-          <Text style={styles.profileMeta}>6个月20天 · 2024年5月20日（周一）</Text>
+          <Text style={styles.profileName}>{emoji} {name} {gender === '男' ? '♂' : '♀'}</Text>
+          <Text style={styles.profileMeta}>{age !== '-' ? age : '请设置生日'} · {dateStr}</Text>
         </View>
 
         <Text style={styles.sectionTitle}>今日记录概览</Text>
@@ -82,22 +90,9 @@ export default function HomeScreen() {
         <Text style={styles.sectionTitle}>今日记录</Text>
         <View style={styles.listCard}>
           {records.length === 0 ? (
-            <Text style={styles.emptyText}>今天暂无记录，去“记录”页新增一条吧。</Text>
+            <Text style={styles.emptyText}>今天暂无记录，去"记录"页新增一条吧。</Text>
           ) : (
-            records.map((row) => (
-              <View key={row.id} style={styles.row}>
-                <Text style={styles.time}>{getTimeLabel(row.created_at)}</Text>
-                <Text style={styles.rowIcon}>{row.record_type === 'vaccine' ? '💉' : getRecordIcon(row.feed_type)}</Text>
-                <View style={styles.rowTextWrap}>
-                  <Text style={styles.rowTitle}>{row.feed_type}</Text>
-                  <Text style={styles.rowDesc}>
-                    {row.record_type === 'vaccine'
-                      ? `${row.vaccine_dose ? `${row.vaccine_dose} · ` : ''}${row.hospital ? `${row.hospital}` : '疫苗接种'}${row.notes ? ` · ${row.notes}` : ''}`
-                      : `${row.feed_type === '辅食' && row.solid_food ? `${row.solid_food} · ` : ''}${row.duration || 0}分钟${row.notes ? ` · ${row.notes}` : ''}`}
-                  </Text>
-                </View>
-              </View>
-            ))
+            records.map((row) => <RecordRow key={row.id} item={row} />)
           )}
         </View>
       </ScrollView>
@@ -118,12 +113,6 @@ const styles = StyleSheet.create({
   icon: { fontSize: 28, marginBottom: 8 },
   cardTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
   cardSub: { color: '#666', marginTop: 2 },
-  listCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, gap: 12 },
+  listCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12 },
   emptyText: { color: '#999', paddingVertical: 8 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  time: { width: 56, color: '#555', fontWeight: '600' },
-  rowIcon: { width: 28, fontSize: 20 },
-  rowTextWrap: { flex: 1 },
-  rowTitle: { fontSize: 16, fontWeight: '600', color: '#222' },
-  rowDesc: { color: '#777', marginTop: 2 },
 });
