@@ -16,12 +16,11 @@
     ],
     "updates": {
       "enabled": true,
-      "checkAutomatically": "ON_APP_START",
-      "fallbackToCacheTimeout": 5000,
-      "url": "https://u.expo.dev/2de296fb-e6cb-4090-8afe-7f551e99f110"
+      "checkAutomatically": "ON_APP_RESUME",
+      "fallbackToCacheTimeout": 5000
     },
     "android": {
-      "package": "com.anonymous.babydailyrecord",
+      "package": "com.koopos.babydailyrecord",
       "runtimeVersion": "1.0.0"
     },
     "extra": {
