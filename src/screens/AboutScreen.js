@@ -14,9 +14,10 @@ export default function AboutScreen({ navigation }) {
     setChecking(false);
 
     if (result.error) {
+      const errorMsg = result.error.message || '未知错误';
       Alert.alert(
         '检查更新失败',
-        '无法连接更新服务器，请检查网络后重试。\n\n提示：EAS Update 功能需要在 EAS Build 打正式包后才能使用，Expo Go 下无法接收更新。',
+        errorMsg + '\n\n提示：EAS Update 功能需要在 EAS Build 打包的应用中才能使用。',
         [{ text: '确定' }]
       );
       return;

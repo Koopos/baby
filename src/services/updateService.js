@@ -13,7 +13,14 @@ export async function checkForUpdate() {
     const update = await Updates.checkAsync();
     return { available: update.isAvailable, isLoading: false, error: null, update };
   } catch (error) {
-    return { available: false, isLoading: false, error };
+    // 改善错误信息，帮助诊断
+    let errorMsg = error.message || String(error);
+    if (errorMsg.includes('network') || errorMsg.includes('Network') || errorMsg.includes('ENOTFOUND') || errorMsg.includes('fetch')) {
+      errorMsg = '网络连接失败，请检查网络后重试';
+    } else if (errorMsg.includes('Updates not enabled')) {
+      errorMsg = '更新功能未启用，请确认使用的是 EAS Build 打包的应用';
+    }
+    return { available: false, isLoading: false, error: new Error(errorMsg) };
   }
 }
 
