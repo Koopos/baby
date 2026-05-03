@@ -1,5 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AddRecordScreen from '../screens/AddRecordScreen';
 import HomeScreen from '../screens/HomeScreen';
@@ -8,11 +8,11 @@ import StatsScreen from '../screens/StatsScreen';
 
 const Tab = createBottomTabNavigator();
 
-const tabIconMap = {
-  Home: '🏠',
-  Stats: '📊',
-  AddRecord: '➕',
-  Me: '👤',
+const TAB_ICONS = {
+  Home: { active: require('../../assets/tab-icons/home-icon_001.jpg'), inactive: require('../../assets/tab-icons/home-icon_001.jpg') },
+  Stats: { active: require('../../assets/tab-icons/stats-icon_001.jpg'), inactive: require('../../assets/tab-icons/stats-icon_001.jpg') },
+  AddRecord: { active: require('../../assets/tab-icons/addrecord-icon_001.jpg'), inactive: require('../../assets/tab-icons/addrecord-icon_001.jpg') },
+  Me: { active: require('../../assets/tab-icons/me-icon_001.jpg'), inactive: require('../../assets/tab-icons/me-icon_001.jpg') },
 };
 
 export default function TabNavigator() {
@@ -30,7 +30,13 @@ export default function TabNavigator() {
           paddingBottom: 8 + insets.bottom,
           height: 62 + insets.bottom,
         },
-        tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 18 }}>{tabIconMap[route.name]}</Text>,
+        tabBarIcon: ({ focused }) => (
+          <Image
+            source={TAB_ICONS[route.name][focused ? 'active' : 'inactive']}
+            style={{ width: 24, height: 24, borderRadius: 4 }}
+            resizeMode="contain"
+          />
+        ),
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: '首页' }} />
