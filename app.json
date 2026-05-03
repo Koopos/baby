@@ -16,7 +16,8 @@
     ],
     "updates": {
       "enabled": true,
-      "fallbackToCacheTimeout": 5000
+      "fallbackToCacheTimeout": 5000,
+      "url": "https://u.expo.dev/2de296fb-e6cb-4090-8afe-7f551e99f110"
     },
     "android": {
       "package": "com.koopos.babydailyrecord",

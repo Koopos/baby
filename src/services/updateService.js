@@ -5,8 +5,8 @@ import * as Updates from 'expo-updates';
  * @returns {Promise<{available: boolean, isLoading: boolean, error: Error|null}>}
  */
 export async function checkForUpdate() {
-  if (!Updates.isEnabled) {
-    return { available: false, isLoading: false, error: new Error('Updates not enabled') };
+  if (!Updates || typeof Updates.checkAsync !== 'function') {
+    return { available: false, isLoading: false, error: new Error('更新功能不可用') };
   }
 
   try {
