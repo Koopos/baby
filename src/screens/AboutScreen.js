@@ -58,7 +58,7 @@ export default function AboutScreen({ navigation }) {
         <View style={styles.logoCard}>
           <Text style={styles.logoEmoji}>👶</Text>
           <Text style={styles.appName}>宝宝日常记录</Text>
-          <Text style={styles.version}>v1.0.0</Text>
+          <Text style={styles.version}>v1.0.1</Text>
           <Text style={styles.subtitle}>简洁好用的宝宝成长记录应用</Text>
         </View>
 
@@ -66,7 +66,7 @@ export default function AboutScreen({ navigation }) {
           <Text style={styles.sectionTitle}>关于应用</Text>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>当前版本</Text>
-            <Text style={styles.infoValue}>1.0.0</Text>
+            <Text style={styles.infoValue}>1.0.1</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>平台</Text>
@@ -76,7 +76,7 @@ export default function AboutScreen({ navigation }) {
 
         <TouchableOpacity style={styles.updateBtn} onPress={handleCheckUpdate} disabled={checking || downloading} activeOpacity={0.8}>
           <Text style={styles.updateBtnText}>
-            {checking ? '检查中...' : downloading ? '更新中...' : '检查更新'}
+            {checking ? '检查中...' : downloading ? '更新中...' : '检查新版本'}
           </Text>
         </TouchableOpacity>
 
