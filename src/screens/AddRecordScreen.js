@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { addRecord, addVaccineRecord, updateRecord, updateVaccineRecord, updateDiaperRecord, addADRecord, updateADRecord, getRecordById, deleteRecord } from '../db/recordsRepository';
@@ -127,7 +127,11 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>{isEditMode ? '编辑记录' : '添加记录'}</Text>
         <View style={styles.formCard}>
           <Text style={styles.label}>记录类型</Text>
@@ -327,6 +331,7 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
           )}
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
