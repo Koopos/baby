@@ -16,7 +16,6 @@
     ],
     "updates": {
       "enabled": true,
-      "checkAutomatically": "ON_APP_RESUME",
       "fallbackToCacheTimeout": 5000
     },
     "android": {
