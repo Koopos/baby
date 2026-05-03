@@ -17,16 +17,23 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_APP_START",
-      "fallbackToCacheTimeout": 5000
+      "fallbackToCacheTimeout": 5000,
+      "url": "https://u.expo.dev/2de296fb-e6cb-4090-8afe-7f551e99f110"
     },
     "android": {
-      "package": "com.anonymous.babydailyrecord"
+      "package": "com.anonymous.babydailyrecord",
+      "runtimeVersion": "1.0.0"
     },
     "extra": {
       "eas": {
         "projectId": "2de296fb-e6cb-4090-8afe-7f551e99f110"
       }
     },
-    "owner": "koopos"
+    "owner": "koopos",
+    "ios": {
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
+    }
   }
 }
