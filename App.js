@@ -9,6 +9,7 @@ import ReminderScreen from './src/screens/ReminderScreen';
 import FeedingGuideScreen from './src/screens/FeedingGuideScreen';
 import MedicalRecordsScreen from './src/screens/MedicalRecordsScreen';
 import AboutScreen from './src/screens/AboutScreen';
+import AIChatScreen from './src/screens/AIChatScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +48,11 @@ export default function App() {
           <Stack.Screen
             name="About"
             component={AboutScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="AIChat"
+            component={AIChatScreen}
             options={{ animation: 'slide_from_right' }}
           />
         </Stack.Navigator>

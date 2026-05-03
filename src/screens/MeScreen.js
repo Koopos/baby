@@ -22,6 +22,7 @@ export default function MeScreen({ navigation }) {
   ];
 
   const menuItems = [
+    { icon: '🤖', title: 'AI 育儿助手', desc: '智能问答，个性化建议', onPress: () => navigation.getParent().navigate('AIChat') },
     { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱', onPress: () => navigation.getParent().navigate('FeedingGuide') },
     { icon: '👨\u200d⚕️', title: '就诊记录', desc: '疫苗与体检信息', onPress: () => navigation.getParent().navigate('MedicalRecords') },
     { icon: '❓', title: '关于我们', desc: '版本信息与反馈', onPress: () => navigation.getParent().navigate('About') },
