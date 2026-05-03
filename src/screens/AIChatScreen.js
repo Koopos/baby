@@ -9,15 +9,16 @@ import {
   KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useBabyProfile } from '../hooks/useBabyProfile';
+import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 import { sendChatMessage, setApiKey } from '../services/aiChatService';
 
 const API_KEY_STORAGE = 'ai_chat_api_key';
 
 export default function AIChatScreen({ navigation }) {
-  const { profile, calcAge } = useBabyProfile();
+  const insets = useSafeAreaInsets();
+  const { profile } = useBabyProfile();
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -191,29 +192,31 @@ export default function AIChatScreen({ navigation }) {
       />
 
       {/* 输入区域 */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="输入你的问题..."
-            placeholderTextColor="#999"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || loading}
-          >
-            <Text style={styles.sendBtnText}>发送</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <View style={{ paddingBottom: insets.bottom }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.inputRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="输入你的问题..."
+              placeholderTextColor="#999"
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
+            />
+            <TouchableOpacity
+              style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || loading}
+            >
+              <Text style={styles.sendBtnText}>发送</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
