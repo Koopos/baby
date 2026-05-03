@@ -1,9 +1,9 @@
 /**
  * AI 育儿助手聊天页面
- * 支持对话、显示宝宝信息、设置 API Key
+ * 支持对话、显示宝宝信息、历史记录持久化
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, FlatList,
   KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator,
@@ -15,6 +15,8 @@ import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 import { sendChatMessage, setApiKey } from '../services/aiChatService';
 
 const API_KEY_STORAGE = 'ai_chat_api_key';
+const MESSAGES_STORAGE = 'ai_chat_messages';
+const MAX_STORED_MESSAGES = 50;
 
 export default function AIChatScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -24,6 +26,7 @@ export default function AIChatScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const flatListRef = useRef(null);
   const apiKeyRef = useRef('');
 
@@ -43,25 +46,70 @@ export default function AIChatScreen({ navigation }) {
     return months;
   };
 
-  useEffect(() => {
-    loadApiKey();
+  // 构建欢迎语
+  const buildWelcomeMessage = useCallback(() => {
     const ageMonths = getAgeMonths();
     const ageText = ageMonths !== null ? `${ageMonths}个月` : '';
-    setMessages([
-      {
-        id: 'welcome',
-        role: 'assistant',
-        content: `👋 你好！我是宝贝成长助手，专为${babyInfo.name}（${ageText}${babyInfo.gender === '男' ? '男宝' : '女宝'}）家长提供育儿支持。\n\n有什么想聊的？比如：\n• 喂养问题（母乳、辅食、断奶）\n• 睡眠问题（夜醒、抱睡、规律作息）\n• 健康问题（发烧、腹泻、湿疹）\n• 发育早教（抬头、翻身、说话）`,
-        time: new Date(),
-      },
-    ]);
+    return {
+      id: 'welcome',
+      role: 'assistant',
+      content: `👋 你好！我是宝贝成长助手，专为${babyInfo.name}（${ageText}${babyInfo.gender === '男' ? '男宝' : '女宝'}）家长提供育儿支持。\n\n有什么想聊的？比如：\n• 喂养问题（母乳、辅食、断奶）\n• 睡眠问题（夜醒、抱睡、规律作息）\n• 健康问题（发烧、腹泻、湿疹）\n• 发育早教（抬头、翻身、说话）`,
+      time: new Date(),
+    };
+  }, [babyInfo]);
+
+  // 加载历史记录
+  useEffect(() => {
+    const loadData = async () => {
+      await loadApiKey();
+      try {
+        const saved = await AsyncStorage.getItem(MESSAGES_STORAGE);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            setHistoryLoaded(true);
+            return;
+          }
+        }
+      } catch (e) {}
+      // 无历史记录，显示欢迎语
+      setMessages([buildWelcomeMessage()]);
+      setHistoryLoaded(true);
+    };
+    loadData();
   }, []);
 
-  const loadApiKey = async () => {
+  // 保存聊天记录到本地
+  const saveMessages = async (msgs) => {
     try {
-      const key = await AsyncStorage.getItem(API_KEY_STORAGE);
-      if (key) apiKeyRef.current = key;
+      // 只保留最近 MAX_STORED_MESSAGES 条，丢弃 time 字段节省空间
+      const toSave = msgs.slice(-MAX_STORED_MESSAGES).map(m => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+      }));
+      await AsyncStorage.setItem(MESSAGES_STORAGE, JSON.stringify(toSave));
     } catch (e) {}
+  };
+
+  // 清空聊天记录
+  const handleClearHistory = () => {
+    Alert.alert(
+      '清空对话',
+      '确定要清空所有聊天记录吗？',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '清空',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem(MESSAGES_STORAGE);
+            setMessages([buildWelcomeMessage()]);
+          },
+        },
+      ]
+    );
   };
 
   const handleSend = async () => {
@@ -77,17 +125,20 @@ export default function AIChatScreen({ navigation }) {
     setInputText('');
     setLoading(true);
 
-    const userMessage = { id: Date.now().toString(), role: 'user', content: text, time: new Date() };
+    const userMessage = { id: Date.now().toString(), role: 'user', content: text };
     const currentMessages = [...messages, userMessage];
     setMessages(currentMessages);
 
     try {
       const history = currentMessages.map(m => ({ role: m.role, content: m.content }));
       const reply = await sendChatMessage(history, babyInfo);
-      setMessages(prev => [
-        ...prev,
-        { id: (Date.now() + 1).toString(), role: 'assistant', content: reply, time: new Date() },
-      ]);
+      const newMessages = [
+        ...currentMessages,
+        { id: (Date.now() + 1).toString(), role: 'assistant', content: reply },
+      ];
+      setMessages(newMessages);
+      // 保存历史
+      await saveMessages(newMessages);
     } catch (err) {
       Alert.alert('发送失败', err.message);
       setMessages(prev => prev.filter(m => m.id !== userMessage.id));
@@ -103,6 +154,13 @@ export default function AIChatScreen({ navigation }) {
     setShowApiKeyInput(false);
     setApiKeyInput('');
     Alert.alert('已保存', 'API Key 已保存，请重新发送消息。');
+  };
+
+  const loadApiKey = async () => {
+    try {
+      const key = await AsyncStorage.getItem(API_KEY_STORAGE);
+      if (key) apiKeyRef.current = key;
+    } catch (e) {}
   };
 
   const renderBubble = ({ item }) => {
@@ -132,9 +190,16 @@ export default function AIChatScreen({ navigation }) {
           <Text style={styles.headerTitleText}>🤖 育儿助手</Text>
           <Text style={styles.headerSubText}>{babyInfo.name} · {ageText || '月龄未知'}</Text>
         </View>
-        <TouchableOpacity onPress={() => setShowApiKeyInput(true)} style={styles.settingsBtn}>
-          <Text style={styles.settingsIcon}>⚙️</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          {messages.length > 1 && (
+            <TouchableOpacity onPress={handleClearHistory} style={styles.headerBtn}>
+              <Text style={styles.headerBtnIcon}>🗑️</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={() => setShowApiKeyInput(true)} style={styles.headerBtn}>
+            <Text style={styles.settingsIcon}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* API Key 设置弹窗 */}
@@ -238,7 +303,9 @@ const styles = StyleSheet.create({
   headerTitle: { alignItems: 'center' },
   headerTitleText: { fontSize: 17, fontWeight: '700', color: '#222' },
   headerSubText: { fontSize: 12, color: '#999', marginTop: 2 },
-  settingsBtn: { padding: 4 },
+  headerRight: { flexDirection: 'row', gap: 8 },
+  headerBtn: { padding: 4 },
+  headerBtnIcon: { fontSize: 18 },
   settingsIcon: { fontSize: 20 },
   chatList: { padding: 16, paddingBottom: 8 },
   bubbleRow: {
