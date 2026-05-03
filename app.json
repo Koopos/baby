@@ -6,10 +6,27 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-updates",
+        {
+          "username": "koopos"
+        }
+      ]
     ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_APP_START",
+      "fallbackToCacheTimeout": 5000
+    },
     "android": {
       "package": "com.anonymous.babydailyrecord"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2de296fb-e6cb-4090-8afe-7f551e99f110"
+      }
+    },
+    "owner": "koopos"
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordsByDate } from '../db/recordsRepository';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
@@ -26,18 +26,27 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      const loadTodayRecords = async () => {
+      const loadData = async () => {
+        await reloadProfile();
         const todayRecords = await getRecordsByDate(getDateKey(new Date()));
         if (!cancelled) {
           setRecords(todayRecords);
         }
       };
-      loadTodayRecords();
+      loadData();
       return () => {
         cancelled = true;
       };
-    }, [])
+    }, [reloadProfile])
   );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await reloadProfile();
+    const todayRecords = await getRecordsByDate(getDateKey(new Date()));
+    setRecords(todayRecords);
+    setRefreshing(false);
+  }, [reloadProfile]);
 
   const today = new Date();
   const dateKey = getDateKey(today);
@@ -68,7 +77,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
         <Text style={styles.title}>宝宝日常记录</Text>
         <View style={styles.profileCard}>
           <Text style={styles.profileName}>{emoji} {name} {gender === '男' ? '♂' : '♀'}</Text>

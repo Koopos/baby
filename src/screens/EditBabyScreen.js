@@ -59,12 +59,13 @@ export default function EditBabyScreen({ navigation, route }) {
     setSaving(true);
     try {
       await updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development });
-      navigation.goBack();
     } catch (err) {
       Alert.alert('保存失败', err.message);
-    } finally {
       setSaving(false);
+      return;
     }
+    setSaving(false);
+    navigation.goBack();
   }
 
   return (

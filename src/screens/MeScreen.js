@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
+import { useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
-import { getAllRecordsForExport, getBabyProfile } from '../db/recordsRepository';
 
 export default function MeScreen({ navigation }) {
   const { profile, reloadProfile } = useBabyProfile();
@@ -18,44 +17,14 @@ export default function MeScreen({ navigation }) {
     await reloadProfile();
   }
 
-  const handleExport = async () => {
-    try {
-      const records = await getAllRecordsForExport();
-      if (records.length === 0) {
-        Alert.alert('无数据', '暂无任何记录可导出。');
-        return;
-      }
-      const baby = await getBabyProfile();
-      const lines = [
-        `宝宝成长记录`,
-        `姓名：${baby?.name || '小宝贝'}`,
-        `生日：${baby?.birthday || '-'}`,
-        `---`,
-      ];
-      for (const r of records) {
-        const date = r.created_at;
-        const type = r.record_type === 'vaccine' ? '💉疫苗' : r.feed_type;
-        const detail = r.record_type === 'vaccine'
-          ? [r.vaccine_dose, r.hospital, r.notes].filter(Boolean).join(' · ')
-          : [r.solid_food, r.duration ? `${r.duration}分钟` : '', r.notes].filter(Boolean).join(' · ');
-        lines.push(`${date}  ${type}  ${detail}`);
-      }
-      const text = lines.join('\n');
-      await Share.share({ message: text, title: `${baby?.name || '宝宝'}成长记录` });
-    } catch (err) {
-      Alert.alert('导出失败', err.message);
-    }
-  };
-
   const quickActions = [
-    { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒' },
-    { icon: '📤', title: '数据导出', desc: '生成成长记录报告', onPress: handleExport },
+    { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒', onPress: () => navigation.getParent().navigate('Reminder') },
   ];
 
   const menuItems = [
-    { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱' },
-    { icon: '👨‍⚕️', title: '就诊记录', desc: '疫苗与体检信息' },
-    { icon: '❓', title: '关于我们', desc: '版本信息与反馈' },
+    { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱', onPress: () => navigation.getParent().navigate('FeedingGuide') },
+    { icon: '👨\u200d⚕️', title: '就诊记录', desc: '疫苗与体检信息', onPress: () => navigation.getParent().navigate('MedicalRecords') },
+    { icon: '❓', title: '关于我们', desc: '版本信息与反馈', onPress: () => navigation.getParent().navigate('About') },
   ];
 
   const name = profile?.name || '小宝贝';
@@ -136,7 +105,12 @@ export default function MeScreen({ navigation }) {
 
         <View style={styles.listCard}>
           {menuItems.map((item) => (
-            <View key={item.title} style={styles.settingRow}>
+            <TouchableOpacity
+              key={item.title}
+              style={styles.settingRow}
+              activeOpacity={0.7}
+              onPress={item.onPress}
+            >
               <View style={styles.rowMain}>
                 <Text style={styles.rowIcon}>{item.icon}</Text>
                 <View>
@@ -145,7 +119,7 @@ export default function MeScreen({ navigation }) {
                 </View>
               </View>
               <Text style={styles.rowArrow}>›</Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>

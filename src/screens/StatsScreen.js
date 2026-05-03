@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getRecordsByMonth, seedTestRecords, clearAllRecords, deleteRecord } from '../db/recordsRepository';
 import RecordRow from '../components/RecordRow';
@@ -30,6 +30,7 @@ export default function StatsScreen() {
   const [showDevMenu, setShowDevMenu] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const titleTapCount = useRef(0);
   const titleTapTimer = useRef(null);
 
@@ -45,15 +46,49 @@ export default function StatsScreen() {
     }
   };
 
+  const loadData = async () => {
+    const [allDateKeys, dayRecords, allMonthRecords] = await Promise.all([
+      getRecordDateKeys(),
+      getRecordsByDate(selectedDate),
+      getRecordsByMonth(viewYear, viewMonth),
+    ]);
+
+    const solidFoodMap = {};
+    const vaccineMap = {};
+    for (const record of allMonthRecords) {
+      const dateKey = record.created_at.split(' ')[0];
+      if (record.record_type === 'vaccine') {
+        vaccineMap[dateKey] = (vaccineMap[dateKey] || 0) + 1;
+      } else if (record.feed_type === '辅食' && record.solid_food) {
+        solidFoodMap[dateKey] = record.solid_food;
+      }
+    }
+
+    setRecordDateKeys(allDateKeys);
+    setSelectedRecords(dayRecords);
+    setSolidFoodByDate(solidFoodMap);
+    setVaccineCountByDate(vaccineMap);
+  };
+
   const handleSeed = async () => {
     setIsSeeding(true);
     try {
       await seedTestRecords();
+      await loadData();
       setSelectedDate(formatDateKey(viewYear, viewMonth, 1));
     } catch (error) {
       console.error('Seed error:', error);
     } finally {
       setIsSeeding(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadData();
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -118,32 +153,10 @@ export default function StatsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    const loadData = async () => {
-      const [allDateKeys, dayRecords, allMonthRecords] = await Promise.all([
-        getRecordDateKeys(),
-        getRecordsByDate(selectedDate),
-        getRecordsByMonth(viewYear, viewMonth),
-      ]);
-
-      if (cancelled) return;
-
-      const solidFoodMap = {};
-      const vaccineMap = {};
-      for (const record of allMonthRecords) {
-        const dateKey = record.created_at.split(' ')[0];
-        if (record.record_type === 'vaccine') {
-          vaccineMap[dateKey] = (vaccineMap[dateKey] || 0) + 1;
-        } else if (record.feed_type === '辅食' && record.solid_food) {
-          solidFoodMap[dateKey] = record.solid_food;
-        }
-      }
-
-      setRecordDateKeys(allDateKeys);
-      setSelectedRecords(dayRecords);
-      setSolidFoodByDate(solidFoodMap);
-      setVaccineCountByDate(vaccineMap);
+    const load = async () => {
+      if (!cancelled) await loadData();
     };
-    loadData();
+    load();
     return () => {
       cancelled = true;
     };
@@ -180,7 +193,7 @@ export default function StatsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}>
         <View style={styles.headerRow}>
           <Pressable onPress={handleTitleTap}>
             <Text style={styles.title}>日历记录</Text>
