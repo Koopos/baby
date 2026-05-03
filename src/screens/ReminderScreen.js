@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAllReminders, addReminder, toggleReminder, deleteReminder } from '../db/reminderRepository';
 import { requestPermissions } from '../services/notificationService';
@@ -121,8 +121,9 @@ export default function ReminderScreen({ navigation }) {
 
       {/* Add Modal */}
       <Modal visible={showAdd} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'padding'} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>新增提醒</Text>
             <Text style={styles.label}>提醒类型</Text>
             <View style={styles.typeRow}>
@@ -146,6 +147,7 @@ export default function ReminderScreen({ navigation }) {
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

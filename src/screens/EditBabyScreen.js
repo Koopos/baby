@@ -71,7 +71,7 @@ export default function EditBabyScreen({ navigation, route }) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={{ flex: 1 }}
       >
         <View style={styles.header}>

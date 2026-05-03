@@ -126,11 +126,13 @@ export default function AddRecordScreen() {
     }
   };
 
-  const Wrapper = Platform.OS === 'ios' ? ({ children, ...props }) => <KeyboardAvoidingView {...props}>{children}</KeyboardAvoidingView> : View;
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <Wrapper behavior="padding" style={{ flex: 1 }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{isEditMode ? '编辑记录' : '添加记录'}</Text>
         <View style={styles.formCard}>
@@ -349,7 +351,7 @@ export default function AddRecordScreen() {
           )}
         </View>
         </ScrollView>
-      </Wrapper>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
