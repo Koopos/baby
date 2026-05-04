@@ -69,11 +69,7 @@ export default function TabNavigator() {
         component={AddRecordScreen}
         options={{ tabBarIcon: ({ focused }) => (
           <View style={styles.addButton}>
-            <Image
-              source={require('../../assets/tab-icons/addrecord-icon_001.jpg')}
-              style={styles.addIcon}
-              resizeMode="contain"
-            />
+            <Text style={styles.addIcon}>+</Text>
           </View>
         )}}
       />
@@ -102,5 +98,5 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  addIcon: { width: 26, height: 26, borderRadius: 0 },
+  addIcon: { fontSize: 28, color: '#FFF', fontWeight: '300' },
 });

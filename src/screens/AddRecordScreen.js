@@ -313,7 +313,7 @@ export default function AddRecordScreen() {
             </>
           )}
 
-          <Text style={styles.label}>记录时间</Text>
+          <Text style={styles.label}>喂养时间</Text>
           <TextInput
             value={recordedAt}
             onChangeText={setRecordedAt}
