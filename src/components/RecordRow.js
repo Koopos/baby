@@ -17,7 +17,9 @@ function getRecordColor(feedType, recordType) {
 }
 
 function formatTime(datetime) {
-  return new Date(datetime.replace(' ', 'T')).toLocaleTimeString('zh-CN', {
+  // Prefer recorded_at (actual event time), fall back to created_at (when record was added)
+  const ts = datetime?.replace(' ', 'T');
+  return new Date(ts).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -67,7 +69,7 @@ export default function RecordRow({ item, showTime = true }) {
     <View style={styles.row}>
       {showTime && (
         <View style={styles.timeWrap}>
-          <Text style={styles.time}>{formatTime(item.created_at)}</Text>
+          <Text style={styles.time}>{formatTime(item.recorded_at || item.created_at)}</Text>
         </View>
       )}
       <View style={[styles.iconWrap, { backgroundColor: colors.icon }]}>

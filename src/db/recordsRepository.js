@@ -50,7 +50,8 @@ export async function initDatabase() {
       vaccine_dose TEXT,
       hospital TEXT,
       vaccinated_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      recorded_at TEXT
     );
   `);
 
@@ -59,6 +60,7 @@ export async function initDatabase() {
   await ensureColumn(db, 'vaccine_dose', 'TEXT');
   await ensureColumn(db, 'hospital', 'TEXT');
   await ensureColumn(db, 'vaccinated_at', 'TEXT');
+  await ensureColumn(db, 'recorded_at', 'TEXT');
 
   const countRow = await db.getFirstAsync('SELECT COUNT(*) AS total FROM records;');
   if ((countRow?.total || 0) === 0) {
@@ -78,19 +80,21 @@ export async function initDatabase() {
   initialized = true;
 }
 
-export async function addRecord({ feedType, duration, notes, solidFood }) {
+export async function addRecord({ feedType, duration, notes, solidFood, recordedAt }) {
   await initDatabase();
   const db = await getDatabase();
-  const createdAt = formatLocalDateTime(new Date());
+  const now = formatLocalDateTime(new Date());
+  const actualTime = recordedAt?.trim() || now;
   await db.runAsync(
-    `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at)
-     VALUES (?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at, recorded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
     'feeding',
     feedType,
     Number.parseInt(duration, 10) || 0,
     notes?.trim() || '',
     solidFood?.trim() || '',
-    createdAt
+    now,
+    actualTime
   );
 }
 
@@ -126,7 +130,7 @@ export async function addVaccineRecord({ vaccineName, vaccineDose, hospital, not
 export async function getAllRecords() {
   await initDatabase();
   const db = await getDatabase();
-  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY created_at DESC;');
+  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY COALESCE(recorded_at, created_at) DESC;');
   return rows || [];
 }
 
@@ -135,8 +139,8 @@ export async function getRecordsByDate(dateKey) {
   const db = await getDatabase();
   const rows = await db.getAllAsync(
     `SELECT * FROM records
-     WHERE DATE(created_at) = ?
-     ORDER BY created_at ASC;`,
+     WHERE DATE(COALESCE(recorded_at, created_at)) = ?
+     ORDER BY COALESCE(recorded_at, created_at) ASC;`,
     dateKey
   );
   return rows || [];
@@ -146,7 +150,7 @@ export async function getRecordDateKeys() {
   await initDatabase();
   const db = await getDatabase();
   const rows = await db.getAllAsync(
-    `SELECT DISTINCT DATE(created_at) AS date_key
+    `SELECT DISTINCT DATE(COALESCE(recorded_at, created_at)) AS date_key
      FROM records
      ORDER BY date_key DESC;`
   );
@@ -158,12 +162,12 @@ export async function getSolidFoodRecordsByMonth(year, month) {
   const db = await getDatabase();
   const monthPrefix = `${year}-${pad(month)}`;
   const rows = await db.getAllAsync(
-    `SELECT DATE(created_at) AS date_key, solid_food, created_at
+    `SELECT DATE(COALESCE(recorded_at, created_at)) AS date_key, solid_food, COALESCE(recorded_at, created_at) AS created_at
      FROM records
      WHERE record_type = 'feeding'
        AND feed_type = '辅食'
        AND TRIM(COALESCE(solid_food, '')) != ''
-       AND strftime('%Y-%m', created_at) = ?
+       AND strftime('%Y-%m', COALESCE(recorded_at, created_at)) = ?
      ORDER BY created_at ASC;`,
     monthPrefix
   );
@@ -176,8 +180,8 @@ export async function getRecordsByMonth(year, month) {
   const monthPrefix = `${year}-${pad(month)}`;
   const rows = await db.getAllAsync(
     `SELECT * FROM records
-     WHERE strftime('%Y-%m', created_at) = ?
-     ORDER BY created_at ASC;`,
+     WHERE strftime('%Y-%m', COALESCE(recorded_at, created_at)) = ?
+     ORDER BY COALESCE(recorded_at, created_at) ASC;`,
     monthPrefix
   );
   return rows || [];
@@ -190,17 +194,19 @@ export async function getRecordById(id) {
   return row;
 }
 
-export async function updateRecord(id, { feedType, duration, notes, solidFood, diaperType, stoolConsistency }) {
+export async function updateRecord(id, { feedType, duration, notes, solidFood, diaperType, stoolConsistency, recordedAt }) {
   await initDatabase();
   const db = await getDatabase();
+  const actualTime = recordedAt?.trim() || null;
   await db.runAsync(
     `UPDATE records
-     SET feed_type = ?, duration = ?, notes = ?, solid_food = ?
+     SET feed_type = ?, duration = ?, notes = ?, solid_food = ?, recorded_at = ?
      WHERE id = ?;`,
     feedType,
     Number.parseInt(duration, 10) || 0,
     notes?.trim() || '',
     solidFood?.trim() || '',
+    actualTime,
     id
   );
 }
@@ -240,33 +246,34 @@ export async function updateDiaperRecord(id, { diaperType, stoolConsistency, not
 export async function addADRecord({ isTaken, dosage, recordedAt, notes }) {
   await initDatabase();
   const db = await getDatabase();
-  const createdAt = formatLocalDateTime(new Date());
-  const dateTime = recordedAt?.trim() ? recordedAt.trim() : createdAt;
+  const now = formatLocalDateTime(new Date());
+  const actualTime = recordedAt?.trim() || now;
   await db.runAsync(
     `INSERT INTO records (
-      record_type, feed_type, duration, notes, solid_food, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?);`,
+      record_type, feed_type, duration, notes, solid_food, created_at, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?);`,
     'feeding',
     'AD',
     isTaken ? 1 : 0,
     isTaken ? '已服用' : '未服用',
     dosage?.trim() || '',
-    dateTime
+    now,
+    actualTime
   );
 }
 
 export async function updateADRecord(id, { isTaken, dosage, recordedAt, notes }) {
   await initDatabase();
   const db = await getDatabase();
-  const dateTime = recordedAt?.trim() ? recordedAt.trim() : formatLocalDateTime(new Date());
+  const actualTime = recordedAt?.trim() || null;
   await db.runAsync(
     `UPDATE records
-     SET duration = ?, notes = ?, solid_food = ?, created_at = ?
+     SET duration = ?, notes = ?, solid_food = ?, recorded_at = ?
      WHERE id = ?;`,
     isTaken ? 1 : 0,
     isTaken ? '已服用' : '未服用',
     dosage?.trim() || '',
-    dateTime,
+    actualTime,
     id
   );
 }
@@ -286,7 +293,7 @@ export async function deleteRecord(id) {
 export async function getAllRecordsForExport() {
   await initDatabase();
   const db = await getDatabase();
-  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY created_at ASC;');
+  const rows = await db.getAllAsync('SELECT * FROM records ORDER BY COALESCE(recorded_at, created_at) ASC;');
   return rows || [];
 }
 
@@ -384,10 +391,11 @@ export async function seedTestRecords() {
   ];
 
   for (const item of records) {
+    const dateTime = `${item.date} 10:00:00`;
     await db.runAsync(
-      `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at)
-       VALUES (?, ?, ?, ?, ?, ?);`,
-      'feeding', '辅食', 15, '', item.food, `${item.date} 10:00:00`
+      `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at, recorded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      'feeding', '辅食', 15, '', item.food, dateTime, dateTime
     );
   }
 
