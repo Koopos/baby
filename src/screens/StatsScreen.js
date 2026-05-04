@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getRecordsByMonth, seedTestRecords, clearAllRecords, deleteRecord } from '../db/recordsRepository';
@@ -14,6 +14,7 @@ function formatDateKey(year, month, day) { return `${year}-${pad(month)}-${pad(d
 
 export default function StatsScreen() {
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const { profile } = useBabyProfile();
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -37,7 +38,7 @@ export default function StatsScreen() {
     if (titleTapCount.current >= 5) { titleTapCount.current = 0; setShowDevMenu(v => !v); }
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [allDateKeys, dayRecords, allMonthRecords] = await Promise.all([
       getRecordDateKeys(),
       getRecordsByDate(selectedDate),
@@ -54,7 +55,7 @@ export default function StatsScreen() {
     setSelectedRecords(dayRecords);
     setSolidFoodByDate(solidFoodMap);
     setVaccineCountByDate(vaccineMap);
-  };
+  }, [selectedDate, viewYear, viewMonth]);
 
   const handleSeed = async () => {
     setIsSeeding(true);
@@ -101,12 +102,12 @@ export default function StatsScreen() {
     setSelectedDate(formatDateKey(newYear, newMonth, 1));
   };
 
-  // Refresh data when screen comes into focus (e.g. after adding a record)
-  useFocusEffect(
-    useCallback(() => {
+  // Refresh data when this tab is focused (e.g. after adding a record from another tab)
+  useEffect(() => {
+    if (isFocused) {
       loadData();
-    }, [viewYear, viewMonth, selectedDate])
-  );
+    }
+  }, [isFocused, viewYear, viewMonth, selectedDate]);
 
   useEffect(() => { let cancelled = false; const load = async () => { if (!cancelled) await loadData(); }; load(); return () => { cancelled = true; }; }, [viewMonth, selectedDate, viewYear]);
 
