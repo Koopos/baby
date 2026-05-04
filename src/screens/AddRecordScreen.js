@@ -318,7 +318,7 @@ export default function AddRecordScreen() {
             </>
           )}
 
-          <Text style={styles.label}>喂养时间</Text>
+          <Text style={styles.label}>{isDiaper || isAD ? '时间' : '喂养时间'}</Text>
           <TextInput
             value={recordedAt}
             onChangeText={setRecordedAt}
