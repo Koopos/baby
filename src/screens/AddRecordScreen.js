@@ -24,8 +24,12 @@ export default function AddRecordScreen() {
   const [vaccineName, setVaccineName] = useState('');
   const [vaccineDose, setVaccineDose] = useState('');
   const [hospital, setHospital] = useState('');
-  const [vaccinatedAt, setVaccinatedAt] = useState(new Date().toLocaleString('zh-CN'));
-  const [recordedAt, setRecordedAt] = useState(new Date().toLocaleString('zh-CN'));
+  const [vaccinatedAt, setVaccinatedAt] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  });
+  const [recordedAt, setRecordedAt] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  });
   const [notes, setNotes] = useState('');
   const [adTaken, setAdTaken] = useState(true);
   const [adDosage, setAdDosage] = useState('一粒');
@@ -57,7 +61,8 @@ export default function AddRecordScreen() {
         setSolidFood(record.solid_food || '');
         setFormulaAmount(record.solid_food || '');
       }
-      setRecordedAt(record.recorded_at || record.created_at || new Date().toLocaleString('zh-CN'));
+      const d = new Date(); const fmt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+      setRecordedAt(record.recorded_at || record.created_at || fmt);
       setNotes(record.notes || '');
     };
     loadRecord();
@@ -112,8 +117,8 @@ export default function AddRecordScreen() {
         setVaccineName('');
         setVaccineDose('');
         setHospital('');
-        setVaccinatedAt(new Date().toLocaleString('zh-CN'));
-        setRecordedAt(new Date().toLocaleString('zh-CN'));
+        setVaccinatedAt(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')} ${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}:${String(new Date().getSeconds()).padStart(2,'0')}`);
+        setRecordedAt(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')} ${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}:${String(new Date().getSeconds()).padStart(2,'0')}`);
         setNotes('');
         setAdTaken(true);
         setAdDosage('一粒');

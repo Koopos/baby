@@ -214,7 +214,8 @@ export async function updateRecord(id, { feedType, duration, notes, solidFood, d
 export async function updateVaccineRecord(id, { vaccineName, vaccineDose, hospital, notes, vaccinatedAt }) {
   await initDatabase();
   const db = await getDatabase();
-  const dateTime = vaccinatedAt?.trim() ? vaccinatedAt.trim() : new Date().toLocaleString('zh-CN');
+  const d = new Date(); const fmt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  const dateTime = vaccinatedAt?.trim() ? vaccinatedAt.trim() : fmt;
   await db.runAsync(
     `UPDATE records
      SET feed_type = ?, vaccine_dose = ?, hospital = ?, notes = ?, vaccinated_at = ?
