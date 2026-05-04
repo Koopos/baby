@@ -57,7 +57,7 @@ export default function AddRecordScreen() {
         setSolidFood(record.solid_food || '');
         setFormulaAmount(record.solid_food || '');
       }
-      setRecordedAt(record.created_at || new Date().toLocaleString('zh-CN'));
+      setRecordedAt(record.recorded_at || record.created_at || new Date().toLocaleString('zh-CN'));
       setNotes(record.notes || '');
     };
     loadRecord();

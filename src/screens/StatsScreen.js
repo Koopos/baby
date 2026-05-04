@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getRecordsByMonth, seedTestRecords, clearAllRecords, deleteRecord } from '../db/recordsRepository';
@@ -46,7 +46,7 @@ export default function StatsScreen() {
     const solidFoodMap = {};
     const vaccineMap = {};
     for (const record of allMonthRecords) {
-      const dateKey = record.created_at.split(' ')[0];
+      const dateKey = (record.recorded_at || record.created_at).split(' ')[0];
       if (record.record_type === 'vaccine') vaccineMap[dateKey] = (vaccineMap[dateKey] || 0) + 1;
       else if (record.feed_type === '辅食' && record.solid_food) solidFoodMap[dateKey] = record.solid_food;
     }
@@ -100,6 +100,13 @@ export default function StatsScreen() {
     setViewYear(newYear); setViewMonth(newMonth);
     setSelectedDate(formatDateKey(newYear, newMonth, 1));
   };
+
+  // Refresh data when screen comes into focus (e.g. after adding a record)
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [viewYear, viewMonth, selectedDate])
+  );
 
   useEffect(() => { let cancelled = false; const load = async () => { if (!cancelled) await loadData(); }; load(); return () => { cancelled = true; }; }, [viewMonth, selectedDate, viewYear]);
 
