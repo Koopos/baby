@@ -95,9 +95,9 @@ export default function HomeScreen({ navigation }) {
         label: '辅食',
         times: solidFoodRecords.length,
         sub: `${solidFoodRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`,
-        color: '#F0FAF3',
-        textColor: '#22C55E',
-        iconBg: '#E8FFE9',
+        color: '#FFF0F0',
+        textColor: '#FF6E68',
+        iconBg: '#FFE8E7',
       },
       {
         type: 'total',

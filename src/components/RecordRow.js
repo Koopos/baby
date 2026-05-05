@@ -11,7 +11,7 @@ function getRecordIcon(feedType, recordType) {
 function getRecordColor(feedType, recordType) {
   if (recordType === 'vaccine') return { bg: '#EEF3FF', text: '#4A6CF7', icon: '#E8EDFF' };
   if (feedType === 'AD') return { bg: '#FFF8E7', text: '#F59E0B', icon: '#FFF4DC' };
-  if (feedType === '辅食') return { bg: '#F0FAF3', text: '#22C55E', icon: '#E8FFE9' };
+  if (feedType === '辅食') return { bg: '#FFF0F0', text: '#FF6E68', icon: '#FFE8E7' };
   if (feedType === '小便' || feedType === '大便' || feedType === '两者都有') return { bg: '#FFF0F0', text: '#FF6E68', icon: '#FFE8E7' };
   return { bg: '#FFF0F0', text: '#FF6E68', icon: '#FFE8E7' };
 }

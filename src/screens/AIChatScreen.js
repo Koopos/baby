@@ -1,6 +1,6 @@
 /**
  * AI 育儿助手聊天页面
- * 支持对话、显示宝宝信息、历史记录持久化
+ * 支持多对话、显示宝宝信息、历史记录持久化
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -11,28 +11,122 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
+import { useBabyProfile } from '../hooks/useBabyProfile';
 import { sendChatMessage, setApiKey } from '../services/aiChatService';
 
 const API_KEY_STORAGE = 'ai_chat_api_key';
-const MESSAGES_STORAGE = 'ai_chat_messages';
+const CONVERSATIONS_STORAGE = 'ai_conversations';
 const MAX_STORED_MESSAGES = 50;
 
-export default function AIChatScreen({ navigation }) {
+// 从旧格式迁移
+const OLD_MESSAGES_STORAGE = 'ai_chat_messages';
+
+function extractTitle(messages) {
+  const firstUser = messages.find(m => m.role === 'user');
+  if (firstUser) {
+    return firstUser.content.slice(0, 30) + (firstUser.content.length > 30 ? '…' : '');
+  }
+  return '新对话';
+}
+
+// 获取或创建当前对话
+async function getOrCreateConversation(conversationId, messages) {
+  try {
+    const saved = await AsyncStorage.getItem(CONVERSATIONS_STORAGE);
+    let conversations = saved ? JSON.parse(saved) : [];
+
+    if (conversationId) {
+      // 已有对话，找到并返回
+      const idx = conversations.findIndex(c => c.id === conversationId);
+      if (idx !== -1) {
+        return { conversation: conversations[idx], conversations, idx };
+      }
+    }
+
+    // 新建对话
+    const newConv = {
+      id: Date.now().toString(),
+      title: extractTitle(messages),
+      updatedAt: new Date().toISOString(),
+      messages: [],
+    };
+    conversations.unshift(newConv);
+    // 限制数量
+    if (conversations.length > MAX_STORED_MESSAGES) {
+      conversations = conversations.slice(0, MAX_STORED_MESSAGES);
+    }
+    await AsyncStorage.setItem(CONVERSATIONS_STORAGE, JSON.stringify(conversations));
+    return { conversation: newConv, conversations, idx: 0 };
+  } catch (e) {
+    console.error('getOrCreateConversation error:', e);
+    return { conversation: null, conversations: [], idx: -1 };
+  }
+}
+
+// 保存对话消息
+async function saveConversation(conversations, idx, messages) {
+  if (idx < 0) return;
+  const updated = [...conversations];
+  updated[idx] = {
+    ...updated[idx],
+    title: extractTitle(messages),
+    updatedAt: new Date().toISOString(),
+    messages: messages.slice(-MAX_STORED_MESSAGES).map(m => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+    })),
+  };
+  await AsyncStorage.setItem(CONVERSATIONS_STORAGE, JSON.stringify(updated));
+}
+
+// 迁移旧数据
+async function migrateOldData() {
+  try {
+    const old = await AsyncStorage.getItem(OLD_MESSAGES_STORAGE);
+    if (!old) return null;
+    const messages = JSON.parse(old);
+    if (!Array.isArray(messages) || messages.length === 0) return null;
+    // 导入为第一个对话
+    const newConv = {
+      id: 'legacy_' + Date.now(),
+      title: extractTitle(messages),
+      updatedAt: new Date().toISOString(),
+      messages: messages.map(m => ({ id: m.id, role: m.role, content: m.content })),
+    };
+    await AsyncStorage.setItem(CONVERSATIONS_STORAGE, JSON.stringify([newConv]));
+    await AsyncStorage.removeItem(OLD_MESSAGES_STORAGE);
+    return newConv;
+  } catch (e) {
+    return null;
+  }
+}
+
+export default function AIChatScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { profile } = useBabyProfile();
+  const conversationId = route.params?.conversationId || null;
+
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [currentConvId, setCurrentConvId] = useState(conversationId);
   const flatListRef = useRef(null);
   const apiKeyRef = useRef('');
 
+  // 持久化的对话列表引用
+  const convDataRef = useRef({ conversations: [], idx: -1 });
+
   const babyInfo = {
     name: profile?.name || '小宝贝',
-    age: profile?.birthday ? calcAge(profile.birthday) : '',
+    ageMonths: profile?.birthday ? (() => {
+      const birth = new Date(profile.birthday + 'T12:00:00');
+      const now = new Date();
+      return (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+    })() : null,
     gender: profile?.gender || '男',
     weight: profile?.weight || '',
     height: profile?.height || '',
@@ -62,50 +156,81 @@ export default function AIChatScreen({ navigation }) {
   useEffect(() => {
     const loadData = async () => {
       await loadApiKey();
-      try {
-        const saved = await AsyncStorage.getItem(MESSAGES_STORAGE);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setMessages(parsed);
-            setHistoryLoaded(true);
-            return;
+
+      // 尝试迁移旧数据
+      const legacy = await migrateOldData();
+
+      if (conversationId) {
+        // 加载指定对话
+        try {
+          const saved = await AsyncStorage.getItem(CONVERSATIONS_STORAGE);
+          if (saved) {
+            const conversations = JSON.parse(saved);
+            const idx = conversations.findIndex(c => c.id === conversationId);
+            if (idx !== -1) {
+              const conv = conversations[idx];
+              setMessages(conv.messages.length > 0 ? conv.messages : [buildWelcomeMessage()]);
+              convDataRef.current = { conversations, idx };
+              setCurrentConvId(conversationId);
+              setHistoryLoaded(true);
+              return;
+            }
           }
-        }
-      } catch (e) {}
-      // 无历史记录，显示欢迎语
+        } catch (e) {}
+      }
+
+      // 新对话或找不到对话
       setMessages([buildWelcomeMessage()]);
+      setCurrentConvId(null);
       setHistoryLoaded(true);
     };
     loadData();
-  }, []);
+  }, [conversationId]);
 
-  // 保存聊天记录到本地
+  // 保存聊天记录到当前对话
   const saveMessages = async (msgs) => {
     try {
-      // 只保留最近 MAX_STORED_MESSAGES 条，丢弃 time 字段节省空间
-      const toSave = msgs.slice(-MAX_STORED_MESSAGES).map(m => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-      }));
-      await AsyncStorage.setItem(MESSAGES_STORAGE, JSON.stringify(toSave));
-    } catch (e) {}
+      let { conversations, idx } = convDataRef.current;
+
+      if (idx === -1 || !currentConvId) {
+        // 首次发消息，创建对话
+        const result = await getOrCreateConversation(null, msgs);
+        if (result.conversation) {
+          conversations = result.conversations;
+          idx = result.idx;
+          const newId = result.conversation.id;
+          setCurrentConvId(newId);
+          convDataRef.current = { conversations, idx };
+          // 更新 navigation params 以便返回列表能刷新
+          navigation.setParams({ conversationId: newId });
+        } else {
+          return;
+        }
+      }
+
+      await saveConversation(conversations, idx, msgs);
+    } catch (e) {
+      console.error('saveMessages error:', e);
+    }
   };
 
   // 清空聊天记录
   const handleClearHistory = () => {
     Alert.alert(
       '清空对话',
-      '确定要清空所有聊天记录吗？',
+      '确定要清空这个对话的所有聊天记录吗？',
       [
         { text: '取消', style: 'cancel' },
         {
           text: '清空',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem(MESSAGES_STORAGE);
-            setMessages([buildWelcomeMessage()]);
+            const welcome = [buildWelcomeMessage()];
+            setMessages(welcome);
+            const { conversations, idx } = convDataRef.current;
+            if (idx !== -1) {
+              await saveConversation(conversations, idx, welcome);
+            }
           },
         },
       ]
@@ -137,7 +262,6 @@ export default function AIChatScreen({ navigation }) {
         { id: (Date.now() + 1).toString(), role: 'assistant', content: reply },
       ];
       setMessages(newMessages);
-      // 保存历史
       await saveMessages(newMessages);
     } catch (err) {
       Alert.alert('发送失败', err.message);
@@ -151,6 +275,7 @@ export default function AIChatScreen({ navigation }) {
     if (!apiKeyInput.trim()) return;
     await AsyncStorage.setItem(API_KEY_STORAGE, apiKeyInput.trim());
     apiKeyRef.current = apiKeyInput.trim();
+    setApiKey(apiKeyInput.trim());
     setShowApiKeyInput(false);
     setApiKeyInput('');
     Alert.alert('已保存', 'API Key 已保存，请重新发送消息。');
@@ -159,7 +284,10 @@ export default function AIChatScreen({ navigation }) {
   const loadApiKey = async () => {
     try {
       const key = await AsyncStorage.getItem(API_KEY_STORAGE);
-      if (key) apiKeyRef.current = key;
+      if (key) {
+        apiKeyRef.current = key;
+        setApiKey(key);
+      }
     } catch (e) {}
   };
 
@@ -257,11 +385,11 @@ export default function AIChatScreen({ navigation }) {
       />
 
       {/* 输入区域 */}
-      <View style={{ paddingBottom: insets.bottom }}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-          keyboardVerticalOffset={0}
-        >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+        style={{ paddingBottom: insets.bottom }}
+      >
           <View style={styles.inputRow}>
             <TextInput
               style={styles.input}
@@ -280,8 +408,7 @@ export default function AIChatScreen({ navigation }) {
               <Text style={styles.sendBtnText}>发送</Text>
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

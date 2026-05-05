@@ -10,6 +10,11 @@ import FeedingGuideScreen from './src/screens/FeedingGuideScreen';
 import MedicalRecordsScreen from './src/screens/MedicalRecordsScreen';
 import AboutScreen from './src/screens/AboutScreen';
 import AIChatScreen from './src/screens/AIChatScreen';
+import AIConversationsScreen from './src/screens/AIConversationsScreen';
+import { initAutoUpdate } from './src/services/updateService';
+
+// 启动时检查并下载更新（静默进行，不阻塞界面）
+initAutoUpdate().catch(console.error);
 
 const Stack = createNativeStackNavigator();
 
@@ -53,6 +58,11 @@ export default function App() {
           <Stack.Screen
             name="AIChat"
             component={AIChatScreen}
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="AIConversations"
+            component={AIConversationsScreen}
             options={{ animation: 'slide_from_right' }}
           />
         </Stack.Navigator>
