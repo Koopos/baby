@@ -1,15 +1,38 @@
 {
   "expo": {
     "name": "宝宝日常记录",
-    "slug": "baby-daily-record",
-    "version": "1.0.0",
+    "slug": "baby",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-updates",
+        {
+          "username": "kilu1123"
+        }
+      ]
     ],
+    "updates": {
+      "enabled": true,
+      "fallbackToCacheTimeout": 5000,
+      "url": "https://u.expo.dev/87fe216c-ca0c-4f17-b7f5-5d7909acf4b8"
+    },
     "android": {
-      "package": "com.anonymous.babydailyrecord"
+      "package": "com.koopos.babydailyrecord",
+      "runtimeVersion": "1.0.2"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "87fe216c-ca0c-4f17-b7f5-5d7909acf4b8"
+      }
+    },
+    "owner": "kilu1123",
+    "ios": {
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     }
   }
 }

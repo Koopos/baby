@@ -10,8 +10,9 @@ export default function AddRecordScreen() {
   const editRecordId = route.params?.recordId;
   const isEditMode = !!editRecordId;
 
-  const [recordType, setRecordType] = useState('母乳');
+  const [recordType, setRecordType] = useState(route.params?.recordType || '母乳');
   const isVaccine = recordType === '疫苗';
+  const isCheckup = recordType === '体检';
   const isDiaper = recordType === '大小便';
   const isAD = recordType === 'AD';
 
@@ -23,8 +24,12 @@ export default function AddRecordScreen() {
   const [vaccineName, setVaccineName] = useState('');
   const [vaccineDose, setVaccineDose] = useState('');
   const [hospital, setHospital] = useState('');
-  const [vaccinatedAt, setVaccinatedAt] = useState(new Date().toLocaleString('zh-CN'));
-  const [recordedAt, setRecordedAt] = useState(new Date().toLocaleString('zh-CN'));
+  const [vaccinatedAt, setVaccinatedAt] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  });
+  const [recordedAt, setRecordedAt] = useState(() => {
+    const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  });
   const [notes, setNotes] = useState('');
   const [adTaken, setAdTaken] = useState(true);
   const [adDosage, setAdDosage] = useState('一粒');
@@ -56,7 +61,8 @@ export default function AddRecordScreen() {
         setSolidFood(record.solid_food || '');
         setFormulaAmount(record.solid_food || '');
       }
-      setRecordedAt(record.created_at || new Date().toLocaleString('zh-CN'));
+      const d = new Date(); const fmt = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+      setRecordedAt(record.recorded_at || record.created_at || fmt);
       setNotes(record.notes || '');
     };
     loadRecord();
@@ -111,8 +117,8 @@ export default function AddRecordScreen() {
         setVaccineName('');
         setVaccineDose('');
         setHospital('');
-setVaccinatedAt(new Date().toLocaleString('zh-CN'));
-        setRecordedAt(new Date().toLocaleString('zh-CN'));
+        setVaccinatedAt(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')} ${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}:${String(new Date().getSeconds()).padStart(2,'0')}`);
+        setRecordedAt(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')} ${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}:${String(new Date().getSeconds()).padStart(2,'0')}`);
         setNotes('');
         setAdTaken(true);
         setAdDosage('一粒');
@@ -128,15 +134,16 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>{isEditMode ? '编辑记录' : '添加记录'}</Text>
+          <Text style={styles.title}>{isEditMode ? '编辑记录' : '添加记录'}</Text>
         <View style={styles.formCard}>
           <Text style={styles.label}>记录类型</Text>
           <View style={styles.typeRow}>
-            {['母乳', '配方奶', '辅食', '疫苗', '大小便', 'AD'].map((item) => {
+            {['母乳', '配方奶', '辅食', '疫苗', '体检', '大小便', 'AD'].map((item) => {
               const active = item === recordType;
               return (
                 <Pressable
@@ -179,6 +186,24 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
                 onChangeText={setVaccinatedAt}
                 placeholder="例如：2026-05-01 09:30:00"
                 style={styles.input}
+              />
+            </>
+          ) : isCheckup ? (
+            <>
+              <Text style={styles.label}>体检时间</Text>
+              <TextInput
+                value={recordedAt}
+                onChangeText={setRecordedAt}
+                placeholder="例如：2026-05-01 09:30:00"
+                style={styles.input}
+              />
+              <Text style={styles.label}>备注</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="可记录身高、体重、发育情况…"
+                style={[styles.input, styles.textarea]}
+                multiline
               />
             </>
           ) : isDiaper ? (
@@ -293,7 +318,7 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
             </>
           )}
 
-          <Text style={styles.label}>记录时间</Text>
+          <Text style={styles.label}>{isDiaper || isAD ? '时间' : '喂养时间'}</Text>
           <TextInput
             value={recordedAt}
             onChangeText={setRecordedAt}
@@ -321,7 +346,7 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
                   style: 'destructive',
                   onPress: async () => {
                     await deleteRecord(editRecordId);
-                    navigation.goBack();
+                    navigation?.goBack?.();
                   },
                 },
               ]);
@@ -330,7 +355,7 @@ setVaccinatedAt(new Date().toLocaleString('zh-CN'));
             </Pressable>
           )}
         </View>
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

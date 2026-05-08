@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, Alert, Share } from 'react-native';
+import { useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
-import { getAllRecordsForExport, getBabyProfile } from '../db/recordsRepository';
+
+const ACCENT = '#FF6E68';
+const GRADIENT_BG = '#FFF5F4';
 
 export default function MeScreen({ navigation }) {
   const { profile, reloadProfile } = useBabyProfile();
@@ -18,44 +20,15 @@ export default function MeScreen({ navigation }) {
     await reloadProfile();
   }
 
-  const handleExport = async () => {
-    try {
-      const records = await getAllRecordsForExport();
-      if (records.length === 0) {
-        Alert.alert('无数据', '暂无任何记录可导出。');
-        return;
-      }
-      const baby = await getBabyProfile();
-      const lines = [
-        `宝宝成长记录`,
-        `姓名：${baby?.name || '小宝贝'}`,
-        `生日：${baby?.birthday || '-'}`,
-        `---`,
-      ];
-      for (const r of records) {
-        const date = r.created_at;
-        const type = r.record_type === 'vaccine' ? '💉疫苗' : r.feed_type;
-        const detail = r.record_type === 'vaccine'
-          ? [r.vaccine_dose, r.hospital, r.notes].filter(Boolean).join(' · ')
-          : [r.solid_food, r.duration ? `${r.duration}分钟` : '', r.notes].filter(Boolean).join(' · ');
-        lines.push(`${date}  ${type}  ${detail}`);
-      }
-      const text = lines.join('\n');
-      await Share.share({ message: text, title: `${baby?.name || '宝宝'}成长记录` });
-    } catch (err) {
-      Alert.alert('导出失败', err.message);
-    }
-  };
-
   const quickActions = [
-    { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒' },
-    { icon: '📤', title: '数据导出', desc: '生成成长记录报告', onPress: handleExport },
+    { icon: '🔔', title: '提醒设置', desc: '喂养/换尿布提醒', color: '#FFEEE8', onPress: () => navigation.getParent().navigate('Reminder') },
   ];
 
   const menuItems = [
-    { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱' },
-    { icon: '👨‍⚕️', title: '就诊记录', desc: '疫苗与体检信息' },
-    { icon: '❓', title: '关于我们', desc: '版本信息与反馈' },
+    { icon: '🤖', title: 'AI 育儿助手', desc: '智能问答，个性化建议', color: '#EEF3FF', onPress: () => navigation.getParent().navigate('AIConversations') },
+    { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱', color: '#F3FAEA', onPress: () => navigation.getParent().navigate('FeedingGuide') },
+    { icon: '💉', title: '就诊记录', desc: '疫苗与体检信息', color: '#FFF5E7', onPress: () => navigation.getParent().navigate('MedicalRecords') },
+    { icon: 'ℹ️', title: '关于我们', desc: '版本信息与反馈', color: '#F5EEFF', onPress: () => navigation.getParent().navigate('About') },
   ];
 
   const name = profile?.name || '小宝贝';
@@ -69,141 +42,273 @@ export default function MeScreen({ navigation }) {
   const age = calcAge(birthday);
 
   const stats = [
-    { icon: '🎂', label: '月龄', value: age !== '-' ? age : '-', bg: '#FCECEC' },
-    { icon: '⚖️', label: '体重', value: weight ? `${weight}kg` : '-', bg: '#EEF3FF' },
-    { icon: '📏', label: '身高', value: height ? `${height}cm` : '-', bg: '#F3FAEA' },
-    { icon: '🧠', label: '发育', value: development || '-', bg: '#FFF5E7' },
+    { icon: '🎂', label: '月龄', value: age !== '-' ? age : '-', bg: '#FFF0F0' },
+    { icon: '⚖️', label: '体重', value: weight ? `${weight} kg` : '-', bg: '#EEF3FF' },
+    { icon: '📏', label: '身高', value: height ? `${height} cm` : '-', bg: '#F0FAF3' },
+    { icon: '🧠', label: '发育', value: development || '-', bg: '#FFF8E7' },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} />}
       >
-        <Text style={styles.title}>我的</Text>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>我的</Text>
+        </View>
+
+        {/* Profile Card — 头像 + 名字 + 基础信息 */}
         <TouchableOpacity
           style={styles.profileCard}
-          activeOpacity={0.7}
+          activeOpacity={0.75}
           onPress={() => navigation.navigate('EditBaby', { profile })}
         >
-          <View style={styles.profileTop}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{emoji}</Text>
+          <View style={styles.profileInner}>
+            <View style={[styles.avatarRing, { backgroundColor: GRADIENT_BG }]}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{emoji}</Text>
+              </View>
             </View>
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{name}</Text>
-              <Text style={styles.profileMeta}>{gender === '男' ? '男宝宝' : '女宝宝'} · 生日 {birthday || '未设置'}</Text>
-              {nextCheckup ? <Text style={styles.profileMeta}>下一次体检：{nextCheckup}</Text> : null}
+              <Text style={styles.profileTags}>
+                <Text style={styles.genderBadge}>{gender === '男' ? '♂ 男宝宝' : '♀ 女宝宝'}</Text>
+                <Text style={styles.dot}> · </Text>
+                <Text style={styles.profileBirthday}>{birthday ? `生日 ${birthday}` : '未设置生日'}</Text>
+              </Text>
+              {nextCheckup ? (
+                <View style={styles.checkupBadge}>
+                  <Text style={styles.checkupText}>📅 下次体检 {nextCheckup}</Text>
+                </View>
+              ) : null}
             </View>
-            <Text style={styles.editHint}>编辑 ›</Text>
-          </View>
-          <View style={styles.profileTag}>
-            <Text style={styles.profileTagText}>点击编辑宝贝信息</Text>
+            <View style={styles.editButton}>
+              <Text style={styles.editButtonText}>编辑</Text>
+            </View>
           </View>
         </TouchableOpacity>
 
+        {/* Stats Cards */}
         <Text style={styles.sectionTitle}>成长概览</Text>
         <View style={styles.statsGrid}>
           {stats.map((item) => (
             <View key={item.label} style={[styles.statsCard, { backgroundColor: item.bg }]}>
-              <Text style={styles.statsIcon}>{item.icon}</Text>
+              <View style={styles.statsIconRow}>
+                <Text style={styles.statsIcon}>{item.icon}</Text>
+              </View>
               <Text style={styles.statsLabel}>{item.label}</Text>
               <Text style={styles.statsValue}>{item.value}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.quickCard}>
-          {quickActions.map((item) => (
+        {/* Quick Action */}
+        {quickActions.map((item) => (
+          <TouchableOpacity
+            key={item.title}
+            style={[styles.actionCard, { backgroundColor: item.color }]}
+            activeOpacity={0.75}
+            onPress={item.onPress}
+          >
+            <View style={styles.actionLeft}>
+              <Text style={styles.actionIcon}>{item.icon}</Text>
+              <View>
+                <Text style={styles.actionTitle}>{item.title}</Text>
+                <Text style={styles.actionDesc}>{item.desc}</Text>
+              </View>
+            </View>
+            <Text style={styles.actionArrow}>›</Text>
+          </TouchableOpacity>
+        ))}
+
+        {/* Menu List */}
+        <Text style={styles.sectionTitle}>更多功能</Text>
+        <View style={styles.menuCard}>
+          {menuItems.map((item, index) => (
             <TouchableOpacity
               key={item.title}
-              style={styles.quickRow}
+              style={[
+                styles.menuRow,
+                index < menuItems.length - 1 && styles.menuRowBorder,
+              ]}
               activeOpacity={0.7}
               onPress={item.onPress}
             >
-              <View style={styles.rowMain}>
-                <Text style={styles.rowIcon}>{item.icon}</Text>
-                <View>
-                  <Text style={styles.rowTitle}>{item.title}</Text>
-                  <Text style={styles.rowSub}>{item.desc}</Text>
-                </View>
+              <View style={[styles.menuIconWrap, { backgroundColor: item.color }]}>
+                <Text style={styles.menuIcon}>{item.icon}</Text>
               </View>
-              <Text style={styles.rowArrow}>›</Text>
+              <View style={styles.menuTextWrap}>
+                <Text style={styles.menuTitle}>{item.title}</Text>
+                <Text style={styles.menuDesc}>{item.desc}</Text>
+              </View>
+              <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.listCard}>
-          {menuItems.map((item) => (
-            <View key={item.title} style={styles.settingRow}>
-              <View style={styles.rowMain}>
-                <Text style={styles.rowIcon}>{item.icon}</Text>
-                <View>
-                  <Text style={styles.rowTitle}>{item.title}</Text>
-                  <Text style={styles.rowSub}>{item.desc}</Text>
-                </View>
-              </View>
-              <Text style={styles.rowArrow}>›</Text>
-            </View>
-          ))}
-        </View>
+        {/* Footer spacing */}
+        <View style={styles.footer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
-  content: { padding: 16, paddingBottom: 30, backgroundColor: '#FAFAFA' },
-  title: { fontSize: 28, fontWeight: '700', color: '#222', marginBottom: 16 },
-  profileCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16 },
-  profileTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  safeArea: { flex: 1, backgroundColor: '#F7F7F8' },
+  content: { paddingBottom: 40 },
+
+  /* ── Header ── */
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 16,
+    backgroundColor: '#F7F7F8',
+  },
+  headerTitle: { fontSize: 30, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
+
+  /* ── Profile Card ── */
+  profileCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#FF6E68',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  profileInner: { flexDirection: 'row', alignItems: 'center' },
+  avatarRing: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FDEEEE',
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  avatarText: { fontSize: 32 },
+  profileInfo: { flex: 1 },
+  profileName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', marginBottom: 5, letterSpacing: -0.3 },
+  profileTags: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 },
+  genderBadge: { fontSize: 13, color: '#FF6E68', fontWeight: '700' },
+  dot: { color: '#CCC', fontSize: 13 },
+  profileBirthday: { fontSize: 13, color: '#888' },
+  checkupBadge: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  checkupText: { fontSize: 11, color: '#FF6E68', fontWeight: '600' },
+  editButton: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  editButtonText: { color: '#FF6E68', fontWeight: '700', fontSize: 13 },
+
+  /* ── Section Title ── */
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    marginBottom: 12,
+    marginHorizontal: 20,
+    letterSpacing: -0.2,
+  },
+
+  /* ── Stats Grid ── */
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    gap: 10,
+    marginBottom: 20,
+  },
+  statsCard: {
+    flex: 1,
+    minWidth: '43%',
+    borderRadius: 16,
+    padding: 14,
+    marginHorizontal: 4,
+  },
+  statsIconRow: { marginBottom: 6 },
+  statsIcon: { fontSize: 22 },
+  statsLabel: { fontSize: 12, color: '#888', marginBottom: 3, fontWeight: '500' },
+  statsValue: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
+
+  /* ── Action Card ── */
+  actionCard: {
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  actionLeft: { flexDirection: 'row', alignItems: 'center' },
+  actionIcon: { fontSize: 24, marginRight: 12 },
+  actionTitle: { fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 2 },
+  actionDesc: { fontSize: 12, color: '#888' },
+  actionArrow: { fontSize: 22, color: '#CCC', fontWeight: '300' },
+
+  /* ── Menu Card ── */
+  menuCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+  },
+  menuRowBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#F0F0F0',
+  },
+  menuIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { fontSize: 30 },
-  profileInfo: { flex: 1 },
-  profileName: { fontSize: 22, fontWeight: '700', marginBottom: 6, color: '#222' },
-  profileMeta: { fontSize: 13, color: '#666', marginBottom: 2 },
-  profileTag: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: '#FFF1F0',
-  },
-  profileTagText: { color: '#FF6E68', fontWeight: '600', fontSize: 12 },
-  editHint: { fontSize: 14, color: '#FF6E68', fontWeight: '600' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#222' },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  statsCard: { width: '48%', borderRadius: 14, padding: 12 },
-  statsIcon: { fontSize: 24, marginBottom: 6 },
-  statsLabel: { fontSize: 13, color: '#666', marginBottom: 2 },
-  statsValue: { fontSize: 18, fontWeight: '700', color: '#222' },
-  quickCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, gap: 12, marginBottom: 12 },
-  listCard: { backgroundColor: '#fff', borderRadius: 14, padding: 12, gap: 12 },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  quickRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 2,
-  },
-  rowMain: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  rowIcon: { width: 28, fontSize: 20 },
-  rowTitle: { fontSize: 16, fontWeight: '600', color: '#222' },
-  rowSub: { color: '#777', marginTop: 2, fontSize: 13 },
-  rowArrow: { color: '#A3A3A3', fontSize: 20, marginLeft: 8 },
+  menuIcon: { fontSize: 20 },
+  menuTextWrap: { flex: 1 },
+  menuTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginBottom: 2 },
+  menuDesc: { fontSize: 12, color: '#AAA' },
+  menuArrow: { fontSize: 20, color: '#CCC', fontWeight: '300', marginLeft: 8 },
+
+  footer: { height: 30 },
 });

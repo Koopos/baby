@@ -59,18 +59,19 @@ export default function EditBabyScreen({ navigation, route }) {
     setSaving(true);
     try {
       await updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development });
-      navigation.goBack();
     } catch (err) {
       Alert.alert('保存失败', err.message);
-    } finally {
       setSaving(false);
+      return;
     }
+    setSaving(false);
+    navigation.goBack();
   }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         style={{ flex: 1 }}
       >
         <View style={styles.header}>

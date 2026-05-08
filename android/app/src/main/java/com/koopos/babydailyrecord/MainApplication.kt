@@ -1,4 +1,4 @@
-package com.anonymous.babydailyrecord
+package com.koopos.babydailyrecord
 
 import android.app.Application
 import android.content.res.Configuration
