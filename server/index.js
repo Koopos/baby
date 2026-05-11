@@ -17,9 +17,17 @@ app.use(express.json());
 // 先用 localhost 测试
 const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
-// ─── 版本信息 ────────────────────────────────────────────────
-// 每次发版前用 `npm run build` 更新这个版本号
-const CURRENT_VERSION = '1.0.2';
+// ─── 版本信息（动态读取，不重启进程也能更新）────────────────────────────────
+// 每次发版前用 `npm run build` 更新 version.json
+function getCurrentVersion() {
+  try {
+    const meta = JSON.parse(readFileSync(join(__dirname, 'version.json'), 'utf8'));
+    return meta.version || '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+}
+const CURRENT_VERSION = getCurrentVersion();
 const BUNDLE_DIR = join(__dirname, 'bundle');
 
 // ─── 辅助函数 ────────────────────────────────────────────────

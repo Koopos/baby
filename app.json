@@ -2,7 +2,7 @@
   "expo": {
     "name": "宝宝日常记录",
     "slug": "baby",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "plugins": [
@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.koopos.babydailyrecord",
-      "runtimeVersion": "1.0.2"
+      "runtimeVersion": "1.0.3"
     },
     "extra": {
       "eas": {

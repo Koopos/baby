@@ -8,6 +8,9 @@ import {
   getRecordsByDate,
   getRecordsByMonth,
   getAllRecords,
+  addRecord,
+  addVaccineRecord,
+  addADRecord,
 } from '../db/recordsRepository';
 
 let apiKey = '';
@@ -70,6 +73,24 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_records_by_date_range',
+    description: '获取指定日期范围内的所有辅食记录，按日期分组，便于查看一段时间的辅食情况',
+    input_schema: {
+      type: 'object',
+      properties: {
+        start_date: {
+          type: 'string',
+          description: '开始日期，格式 YYYY-MM-DD，如 2026-05-01',
+        },
+        end_date: {
+          type: 'string',
+          description: '结束日期，格式 YYYY-MM-DD，如 2026-05-06',
+        },
+      },
+      required: ['start_date', 'end_date'],
+    },
+  },
+  {
     name: 'get_recent_records',
     description: '获取最近 N 天的所有记录',
     input_schema: {
@@ -81,6 +102,68 @@ const TOOLS = [
         },
       },
       required: ['days'],
+    },
+  },
+  {
+    name: 'add_record_via_chat',
+    description: '通过对话录入一条宝宝喂养/护理记录，自动保存到本地数据库。可录入：母乳/配方奶/辅食时长（分钟）、辅食内容、大小便情况（类型+形态）、AD服用情况、疫苗名称+剂次+机构+时间。返回操作结果。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        feed_type: {
+          type: 'string',
+          description: '记录类型：母乳、配方奶、辅食、大小便、AD、疫苗',
+        },
+        duration: {
+          type: 'integer',
+          description: '喂养时长（分钟），辅食用',
+        },
+        solid_food: {
+          type: 'string',
+          description: '辅食内容，如"米粉+苹果泥"',
+        },
+        formula_amount: {
+          type: 'string',
+          description: '配方奶奶量（毫升）',
+        },
+        diaper_type: {
+          type: 'string',
+          description: '大小便类型：小便、大便、两者都有',
+        },
+        stool_consistency: {
+          type: 'string',
+          description: '大便形态：正常、偏硬、偏软、稀水',
+        },
+        ad_taken: {
+          type: 'boolean',
+          description: 'AD是否已服用',
+        },
+        ad_dosage: {
+          type: 'string',
+          description: 'AD剂量：一粒、两粒',
+        },
+        vaccine_name: {
+          type: 'string',
+          description: '疫苗名称，如"五联疫苗"',
+        },
+        vaccine_dose: {
+          type: 'string',
+          description: '剂次，如"第1针"',
+        },
+        hospital: {
+          type: 'string',
+          description: '接种机构',
+        },
+        recorded_at: {
+          type: 'string',
+          description: '记录时间，格式 YYYY-MM-DD HH:MM:SS，默认为当前时间',
+        },
+        notes: {
+          type: 'string',
+          description: '备注说明',
+        },
+      },
+      required: ['feed_type'],
     },
   },
 ];
@@ -124,6 +207,37 @@ async function executeTool(toolName, toolArgs) {
       return formatRecords(records, `${year}-${String(month).padStart(2, '0')}`);
     }
 
+    case 'get_records_by_date_range': {
+      const { start_date, end_date } = toolArgs;
+      const all = await getAllRecords();
+      const start = new Date(start_date);
+      const end = new Date(end_date);
+      end.setHours(23, 59, 59, 999); // inclusive
+      const filtered = all.filter(r => {
+        const d = new Date((r.recorded_at || r.created_at).replace(/\//g, '-'));
+        return d >= start && d <= end;
+      });
+      if (filtered.length === 0) {
+        return `【${start_date} ~ ${end_date}】暂无辅食记录`;
+      }
+      // 辅食只展示 feed_type='辅食' 的，按日期分组
+      const solidFoods = filtered.filter(r => r.record_type === 'feeding' && r.feed_type === '辅食');
+      if (solidFoods.length === 0) {
+        return `【${start_date} ~ ${end_date}】暂无辅食记录`;
+      }
+      const lines = [`【${start_date} ~ ${end_date}】辅食记录（共${solidFoods.length}条）：`];
+      const byDate = {};
+      solidFoods.forEach(r => {
+        const d = (r.recorded_at || r.created_at).slice(0, 10);
+        if (!byDate[d]) byDate[d] = [];
+        byDate[d].push(r.solid_food || '未知');
+      });
+      Object.keys(byDate).sort().forEach(date => {
+        lines.push(`${date}：${byDate[date].join('、')}`);
+      });
+      return lines.join('\n');
+    }
+
     case 'get_recent_records': {
       const { days } = toolArgs;
       const records = await getAllRecords();
@@ -134,6 +248,77 @@ async function executeTool(toolName, toolArgs) {
         return d >= cutoff;
       });
       return formatRecords(filtered, `最近${days}天`);
+    }
+
+    case 'add_record_via_chat': {
+      const {
+        feed_type,
+        duration,
+        solid_food,
+        formula_amount,
+        diaper_type,
+        stool_consistency,
+        ad_taken,
+        ad_dosage,
+        vaccine_name,
+        vaccine_dose,
+        hospital,
+        recorded_at,
+        notes,
+      } = toolArgs;
+
+      try {
+        if (feed_type === '疫苗') {
+          await addVaccineRecord({
+            vaccineName: vaccine_name || '未命名疫苗',
+            vaccineDose: vaccine_dose || '',
+            hospital: hospital || '',
+            notes: notes || '',
+            vaccinatedAt: recorded_at || undefined,
+          });
+          return `✅ 疫苗记录已保存：${vaccine_name || '未命名疫苗'} ${vaccine_dose || ''}。`;
+        }
+
+        if (feed_type === 'AD') {
+          await addADRecord({
+            isTaken: ad_taken !== false,
+            dosage: ad_dosage || '一粒',
+            recordedAt: recorded_at || undefined,
+            notes: notes || '',
+          });
+          return `✅ AD记录已保存：${ad_taken !== false ? '已服用' : '未服用'} ${ad_dosage || '一粒'}。`;
+        }
+
+        if (feed_type === '大小便') {
+          await addRecord({
+            feedType: diaper_type || '两者都有',
+            duration: 0,
+            notes: notes || '',
+            solidFood: stool_consistency || '',
+            diaperType: diaper_type || '两者都有',
+            stoolConsistency: stool_consistency || '',
+            recordedAt: recorded_at || undefined,
+          });
+          return `✅ 大小便记录已保存：${diaper_type || '两者都有'} ${stool_consistency ? `，形态：${stool_consistency}` : ''}。`;
+        }
+
+        // 母乳 / 配方奶 / 辅食
+        await addRecord({
+          feedType: feed_type,
+          duration: duration || 0,
+          notes: notes || '',
+          solidFood: feed_type === '辅食' ? (solid_food || '') : (formula_amount || ''),
+          recordedAt: recorded_at || undefined,
+        });
+
+        let detail = '';
+        if (feed_type === '辅食' && solid_food) detail = `，内容：${solid_food}`;
+        if (feed_type === '配方奶' && formula_amount) detail = `，${formula_amount}毫升`;
+
+        return `✅ ${feed_type}记录已保存${detail ? `（${detail}）` : ''}，时长${duration || 0}分钟。`;
+      } catch (err) {
+        return `❌ 保存失败：${err.message}。请重试。`;
+      }
     }
 
     default:
@@ -340,7 +525,18 @@ function buildSystemPrompt(babyInfo = {}) {
 - 问"今天/昨天/某天"喝奶、辅食、diaper 情况 → get_today_records 或 get_records_by_date
 - 问"最近几天"喂养情况 → get_recent_records
 - 问"这月/某月"的情况 → get_records_by_month
+- 问"5月1日到5月6日吃了什么辅食"等跨日期范围 → get_records_by_date_range
 - 问宝宝基本信息 → get_baby_profile
+
+【通过对话录入数据】
+当用户说"记一下"、"帮我记录"、"录入"等意图时，必须调用 add_record_via_chat 工具将数据存入本地数据库：
+- 用户说"喂了母乳20分钟" → add_record_via_chat(feed_type="母乳", duration=20)
+- 用户说"吃了米粉" → add_record_via_chat(feed_type="辅食", solid_food="米粉")
+- 用户说"喝配方奶120毫升" → add_record_via_chat(feed_type="配方奶", formula_amount="120")
+- 用户说"今天 AD 吃了一粒" → add_record_via_chat(feed_type="AD", ad_taken=true, ad_dosage="一粒")
+- 用户说"打了五联疫苗第1针" → add_record_via_chat(feed_type="疫苗", vaccine_name="五联疫苗", vaccine_dose="第1针")
+- 用户说"今天没大便" → add_record_via_chat(feed_type="大小便", diaper_type="两者都有", stool_consistency="正常")
+- 用户可指定时间，如"昨晚8点喂了母乳" → add_record_via_chat(feed_type="母乳", duration=20, recorded_at="2026-05-10 20:00:00")
 
 【回复规范】
 1. 先调用工具获取数据，再根据数据回答（不要编造数据）

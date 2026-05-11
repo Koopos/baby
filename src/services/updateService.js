@@ -13,8 +13,10 @@ import { Updates } from 'expo-updates';
 import * as FileSystem from 'expo-file-system';
 
 // ─── 配置 ─────────────────────────────────────────────────────
-// 改成你的更新服务器地址
-const UPDATE_SERVER_URL = 'http://YOUR_SERVER_IP:3000';
+// 家里更新服务器地址（部署后改成你家服务器的 IP 或域名）
+// 例如：http://192.168.1.200:3000
+// 如果留空则使用 app.json 中的 expo.updates.url（EAS）
+const HOME_UPDATE_SERVER = '';
 
 // ─── 版本信息 ─────────────────────────────────────────────────
 // app.json 中的版本号需要与 server/version.json 保持一致
@@ -45,8 +47,12 @@ export async function checkForUpdate() {
     }
 
     // 方式二：自实现 HTTP 检查（不依赖 expo-updates 的 URL 配置）
+    // 如果配置了 HOME_UPDATE_SERVER 则使用自建服务器，否则使用 EAS
     const currentVersion = getCurrentVersion();
-    const url = `${UPDATE_SERVER_URL}/manifest?platform=android&runtime-version=${currentVersion}&sdkVersion=54.0.0`;
+    const baseUrl = HOME_UPDATE_SERVER || `https://u.expo.dev/87fe216c-ca0c-4f17-b7f5-5d7909acf4b8`;
+    const url = HOME_UPDATE_SERVER
+      ? `${baseUrl}/manifest?platform=android&runtime-version=${currentVersion}&sdkVersion=54.0.0`
+      : `${baseUrl}/?sdkVersion=54.0.0&runtimeVersion=${currentVersion}&platform=android`;
 
     const response = await fetch(url, {
       method: 'GET',
