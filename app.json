@@ -17,7 +17,7 @@
     "updates": {
       "enabled": true,
       "fallbackToCacheTimeout": 5000,
-      "url": "https://u.expo.dev/87fe216c-ca0c-4f17-b7f5-5d7909acf4b8"
+      "url": "http://127.0.0.1/updates"
     },
     "android": {
       "package": "com.koopos.babydailyrecord",

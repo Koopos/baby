@@ -8,6 +8,7 @@ import {
   getRecordsByDate,
   getRecordsByMonth,
   getAllRecords,
+  addRecord,
 } from '../db/recordsRepository';
 
 let apiKey = '';
@@ -83,6 +84,28 @@ const TOOLS = [
       required: ['days'],
     },
   },
+  {
+    name: 'add_solid_food_record',
+    description: '录入一条辅食记录。当用户说"记一下今天吃了米粉"、"记一下0501吃了苹果泥"等类似语句时调用此工具。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        solid_food: {
+          type: 'string',
+          description: '辅食名称/描述，如"米粉"、"苹果泥"、"南瓜糊"',
+        },
+        notes: {
+          type: 'string',
+          description: '备注（可选），如"吃得很好"、"不怎么爱吃"',
+        },
+        recorded_at: {
+          type: 'string',
+          description: '记录时间（可选），格式 YYYY-MM-DD HH:MM:SS，如 2026-05-01 10:30:00。不填则使用当前时间。',
+        },
+      },
+      required: ['solid_food'],
+    },
+  },
 ];
 
 // ─── 工具执行 ─────────────────────────────────────────────────────
@@ -134,6 +157,21 @@ async function executeTool(toolName, toolArgs) {
         return d >= cutoff;
       });
       return formatRecords(filtered, `最近${days}天`);
+    }
+
+    case 'add_solid_food_record': {
+      const { solid_food, notes, recorded_at } = toolArgs;
+      await addRecord({
+        feedType: '辅食',
+        duration: 0,
+        notes: notes || '',
+        solidFood: solid_food,
+        recordedAt: recorded_at,
+      });
+      const timeStr = recorded_at
+        ? new Date(recorded_at.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1-$2-$3T00:00:00')).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+        : new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      return `✅ 已录入【辅食】：${solid_food}${notes ? `（${notes}）` : ''}，时间：${timeStr}`;
     }
 
     default:
@@ -341,6 +379,12 @@ function buildSystemPrompt(babyInfo = {}) {
 - 问"最近几天"喂养情况 → get_recent_records
 - 问"这月/某月"的情况 → get_records_by_month
 - 问宝宝基本信息 → get_baby_profile
+- 用户说"记一下吃了 X"、"录入辅食"等 → add_solid_food_record
+
+【日期格式约定】
+- add_solid_food_record 的 recorded_at 格式为 YYYY-MM-DD HH:MM:SS，例如 2026-05-01 10:30:00
+- 如果用户说"0501"等简略格式，默认当前年份（2026年），转换为 2026-05-01
+- 如果用户说"0501-0506每天吃了米粉"，需要为每天（0501、0502、0503、0504、0505、0506）各调用一次 add_solid_food_record
 
 【回复规范】
 1. 先调用工具获取数据，再根据数据回答（不要编造数据）
