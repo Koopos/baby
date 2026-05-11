@@ -11,6 +11,7 @@ import {
   addRecord,
   addVaccineRecord,
   addADRecord,
+  addSolidFoodRecords,
 } from '../db/recordsRepository';
 
 let apiKey = '';
@@ -166,6 +167,51 @@ const TOOLS = [
       required: ['feed_type'],
     },
   },
+  {
+    name: 'add_solid_food_record',
+    description: '录入一条辅食记录。当用户说"记一下今天吃了米粉"、"记一下0501吃了苹果泥"等类似语句时调用此工具。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        solid_food: {
+          type: 'string',
+          description: '辅食名称/描述，如"米粉"、"苹果泥"、"南瓜糊"',
+        },
+        notes: {
+          type: 'string',
+          description: '备注（可选），如"吃得很好"、"不怎么爱吃"',
+        },
+        recorded_at: {
+          type: 'string',
+          description: '记录时间（可选），格式 YYYY-MM-DD HH:MM:SS，如 2026-05-01 10:30:00。不填则使用当前时间。',
+        },
+      },
+      required: ['solid_food'],
+    },
+  },
+  {
+    name: 'add_solid_food_records_batch',
+    description: '批量录入多条辅食记录。当用户说"0501-0506每天吃了米粉"、"批量录入这周辅食"等涉及多个日期的录入时调用此工具。一次最多录入30条。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        records: {
+          type: 'array',
+          description: '辅食记录列表，每条包含 solid_food（辅食名称）、recorded_at（记录时间 YYYY-MM-DD HH:MM:SS）、notes（备注，可选）',
+          items: {
+            type: 'object',
+            properties: {
+              solid_food: { type: 'string', description: '辅食名称，如"米粉"' },
+              recorded_at: { type: 'string', description: '记录时间，格式 YYYY-MM-DD HH:MM:SS' },
+              notes: { type: 'string', description: '备注（可选）' },
+            },
+            required: ['solid_food', 'recorded_at'],
+          },
+        },
+      },
+      required: ['records'],
+    },
+  },
 ];
 
 // ─── 工具执行 ─────────────────────────────────────────────────────
@@ -319,6 +365,38 @@ async function executeTool(toolName, toolArgs) {
       } catch (err) {
         return `❌ 保存失败：${err.message}。请重试。`;
       }
+    }
+
+    case 'add_solid_food_record': {
+      const { solid_food, notes, recorded_at } = toolArgs;
+      await addRecord({
+        feedType: '辅食',
+        duration: 0,
+        notes: notes || '',
+        solidFood: solid_food,
+        recordedAt: recorded_at,
+      });
+      const timeStr = recorded_at
+        ? new Date(recorded_at.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1-$2-$3T00:00:00')).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+        : new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      return `✅ 已录入【辅食】：${solid_food}${notes ? `（${notes}）` : ''}，时间：${timeStr}`;
+    }
+
+    case 'add_solid_food_records_batch': {
+      const { records } = toolArgs;
+      if (!records || records.length === 0) {
+        return '没有要录入的记录';
+      }
+      if (records.length > 30) {
+        return `一次最多录入30条，本次${records.length}条超出限制，请减少数量后重试`;
+      }
+      const items = records.map(r => ({
+        solidFood: r.solid_food,
+        recordedAt: r.recorded_at,
+        notes: r.notes || '',
+      }));
+      const count = await addSolidFoodRecords(items);
+      return `✅ 批量录入成功，共 ${count} 条辅食记录：\n${records.map((r, i) => `${i + 1}. ${r.solid_food} — ${r.recorded_at}`).join('\n')}`;
     }
 
     default:
@@ -527,6 +605,12 @@ function buildSystemPrompt(babyInfo = {}) {
 - 问"这月/某月"的情况 → get_records_by_month
 - 问"5月1日到5月6日吃了什么辅食"等跨日期范围 → get_records_by_date_range
 - 问宝宝基本信息 → get_baby_profile
+- 用户说"记一下吃了 X"、"录入辅食"等 → add_solid_food_record
+
+【日期格式约定】
+- 单条录入 add_solid_food_record 的 recorded_at 格式为 YYYY-MM-DD HH:MM:SS，例如 2026-05-01 10:30:00
+- 批量录入 add_solid_food_records_batch 一次最多 30 条
+- 如果用户说"0501-0506每天吃了米粉"，调用 add_solid_food_records_batch，日期自动补全为 2026-05-01 到 2026-05-06，默认时间 10:00:00
 
 【通过对话录入数据】
 当用户说"记一下"、"帮我记录"、"录入"等意图时，必须调用 add_record_via_chat 工具将数据存入本地数据库：

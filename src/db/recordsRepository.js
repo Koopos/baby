@@ -279,6 +279,28 @@ export async function updateADRecord(id, { isTaken, dosage, recordedAt, notes })
   );
 }
 
+export async function addSolidFoodRecords(items) {
+  if (!items || items.length === 0) return 0;
+  await initDatabase();
+  const db = await getDatabase();
+  const now = formatLocalDateTime(new Date());
+  const placeholders = items.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+  const values = items.flatMap(item => [
+    'feeding',
+    '辅食',
+    0,
+    item.notes?.trim() || '',
+    item.solidFood?.trim() || '',
+    now,
+    item.recordedAt?.trim() || now,
+  ]);
+  await db.runAsync(
+    `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at, recorded_at) VALUES ${placeholders};`,
+    ...values
+  );
+  return items.length;
+}
+
 export async function clearAllRecords() {
   await initDatabase();
   const db = await getDatabase();

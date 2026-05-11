@@ -371,9 +371,10 @@ export default function AIChatScreen({ navigation, route }) {
         data={messages}
         renderItem={renderBubble}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.chatList}
+        contentContainerStyle={[styles.chatList, { paddingBottom: insets.bottom > 0 ? 8 : 12 }]}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
         onLayout={() => flatListRef.current?.scrollToEnd()}
+        keyboardShouldPersistTaps="handled"
         ListFooterComponent={loading ? (
           <View style={[styles.bubbleRow, styles.bubbleRowBot]}>
             <Text style={styles.avatarBot}>🤖</Text>
@@ -386,7 +387,7 @@ export default function AIChatScreen({ navigation, route }) {
 
       {/* 输入区域 */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         keyboardVerticalOffset={0}
         style={{ paddingBottom: insets.bottom }}
       >
