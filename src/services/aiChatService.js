@@ -9,6 +9,7 @@ import {
   getRecordsByMonth,
   getAllRecords,
   addRecord,
+  addSolidFoodRecords,
 } from '../db/recordsRepository';
 
 let apiKey = '';
@@ -106,6 +107,29 @@ const TOOLS = [
       required: ['solid_food'],
     },
   },
+  {
+    name: 'add_solid_food_records_batch',
+    description: '批量录入多条辅食记录。当用户说"0501-0506每天吃了米粉"、"批量录入这周辅食"等涉及多个日期的录入时调用此工具。一次最多录入30条。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        records: {
+          type: 'array',
+          description: '辅食记录列表，每条包含 solid_food（辅食名称）、recorded_at（记录时间 YYYY-MM-DD HH:MM:SS）、notes（备注，可选）',
+          items: {
+            type: 'object',
+            properties: {
+              solid_food: { type: 'string', description: '辅食名称，如"米粉"' },
+              recorded_at: { type: 'string', description: '记录时间，格式 YYYY-MM-DD HH:MM:SS' },
+              notes: { type: 'string', description: '备注（可选）' },
+            },
+            required: ['solid_food', 'recorded_at'],
+          },
+        },
+      },
+      required: ['records'],
+    },
+  },
 ];
 
 // ─── 工具执行 ─────────────────────────────────────────────────────
@@ -172,6 +196,23 @@ async function executeTool(toolName, toolArgs) {
         ? new Date(recorded_at.replace(/(\d{4})-(\d{2})-(\d{2})/, '$1-$2-$3T00:00:00')).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
         : new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
       return `✅ 已录入【辅食】：${solid_food}${notes ? `（${notes}）` : ''}，时间：${timeStr}`;
+    }
+
+    case 'add_solid_food_records_batch': {
+      const { records } = toolArgs;
+      if (!records || records.length === 0) {
+        return '没有要录入的记录';
+      }
+      if (records.length > 30) {
+        return `一次最多录入30条，本次${records.length}条超出限制，请减少数量后重试`;
+      }
+      const items = records.map(r => ({
+        solidFood: r.solid_food,
+        recordedAt: r.recorded_at,
+        notes: r.notes || '',
+      }));
+      const count = await addSolidFoodRecords(items);
+      return `✅ 批量录入成功，共 ${count} 条辅食记录：\n${records.map((r, i) => `${i + 1}. ${r.solid_food} — ${r.recorded_at}`).join('\n')}`;
     }
 
     default:
@@ -382,9 +423,9 @@ function buildSystemPrompt(babyInfo = {}) {
 - 用户说"记一下吃了 X"、"录入辅食"等 → add_solid_food_record
 
 【日期格式约定】
-- add_solid_food_record 的 recorded_at 格式为 YYYY-MM-DD HH:MM:SS，例如 2026-05-01 10:30:00
-- 如果用户说"0501"等简略格式，默认当前年份（2026年），转换为 2026-05-01
-- 如果用户说"0501-0506每天吃了米粉"，需要为每天（0501、0502、0503、0504、0505、0506）各调用一次 add_solid_food_record
+- 单条录入 add_solid_food_record 的 recorded_at 格式为 YYYY-MM-DD HH:MM:SS，例如 2026-05-01 10:30:00
+- 批量录入 add_solid_food_records_batch 一次最多 30 条
+- 如果用户说"0501-0506每天吃了米粉"，调用 add_solid_food_records_batch，日期自动补全为 2026-05-01 到 2026-05-06，默认时间 10:00:00
 
 【回复规范】
 1. 先调用工具获取数据，再根据数据回答（不要编造数据）
