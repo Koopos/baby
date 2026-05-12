@@ -1,10 +1,20 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Dimensions, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getRecordsByDate } from '../db/recordsRepository';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
-import RecordRow from '../components/RecordRow';
+import FeedCard from '../components/FeedCard';
+import { fetchHomeFeedCards } from '../services/homeFeedService';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ACCENT = '#FF6E68';
@@ -25,221 +35,205 @@ function getMonthDay(date) {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+// FeedCard 展开详情
+function FeedDetailModal({ card, visible, onClose }) {
+  if (!visible || !card) return null;
+
+  return (
+    <View style={styles.modalOverlay}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose} />
+      <View style={styles.modalSheet}>
+        <View style={styles.modalHandle} />
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalIcon}>{card.icon}</Text>
+          <Text style={styles.modalTitle}>{card.title}</Text>
+        </View>
+        <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <Text style={styles.modalDetail}>{card.detail}</Text>
+        </ScrollView>
+        <Pressable style={styles.modalCloseBtn} onPress={onClose}>
+          <Text style={styles.modalCloseText}>关闭</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// Feed 列表头部（宝宝信息 + 日期）
+function FeedHeader({ profile, today, weekday, monthDay, onProfilePress }) {
+  const name = profile?.name || '小宝贝';
+  const birthday = profile?.birthday || '';
+  const emoji = profile?.avatar_emoji || '👶';
+  const age = calcAge(birthday);
+  const gender = profile?.gender || '男';
+
+  return (
+    <View style={styles.feedHeader}>
+      {/* 宝宝信息卡 */}
+      <Pressable style={styles.profileCard} onPress={onProfilePress}>
+        <View style={styles.profileLeft}>
+          <View style={[styles.profileAvatar, { backgroundColor: '#FFF0F0' }]}>
+            <Text style={styles.profileAvatarText}>{emoji}</Text>
+          </View>
+          <View>
+            <Text style={styles.profileName}>{name}</Text>
+            <Text style={styles.profileMeta}>
+              {gender === '男' ? '男宝宝 ♂' : '女宝宝 ♀'} · {age !== '-' ? age : '请设置生日'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.profileRight}>
+          <Text style={styles.profileTag}>首页</Text>
+        </View>
+      </Pressable>
+
+      {/* 日期标签 */}
+      <View style={styles.dateCard}>
+        <Text style={styles.dateText}>{monthDay}</Text>
+        <Text style={styles.weekdayText}>{weekday}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen({ navigation }) {
-  const [records, setRecords] = useState([]);
+  const [feedCards, setFeedCards] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [showDetail, setShowDetail] = useState(false);
   const { profile, reloadProfile } = useBabyProfile();
+
+  const loadFeedCards = useCallback(async () => {
+    setLoadingFeed(true);
+    try {
+      const cards = await fetchHomeFeedCards();
+      setFeedCards(cards || []);
+    } catch (err) {
+      console.warn('[Home] loadFeedCards failed:', err);
+    } finally {
+      setLoadingFeed(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       const loadData = async () => {
         await reloadProfile();
-        const todayRecords = await getRecordsByDate(getDateKey(new Date()));
-        if (!cancelled) setRecords(todayRecords);
       };
       loadData();
+      loadFeedCards();
       return () => { cancelled = true; };
-    }, [reloadProfile])
+    }, [reloadProfile, loadFeedCards])
   );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await reloadProfile();
-    const todayRecords = await getRecordsByDate(getDateKey(new Date()));
-    setRecords(todayRecords);
+    await loadFeedCards();
     setRefreshing(false);
-  }, [reloadProfile]);
+  }, [reloadProfile, loadFeedCards]);
 
   const today = new Date();
   const weekday = getWeekdayName(today);
   const monthDay = getMonthDay(today);
 
-  const name = profile?.name || '小宝贝';
-  const gender = profile?.gender || '男';
-  const birthday = profile?.birthday || '';
-  const emoji = profile?.avatar_emoji || '👶';
-  const age = calcAge(birthday);
+  const handleCardPress = useCallback((card) => {
+    if (card.action === 'view_detail') {
+      setSelectedCard(card);
+      setShowDetail(true);
+    } else if (card.action === 'view_ai') {
+      navigation.navigate('AIChat');
+    } else if (card.action === 'record') {
+      navigation.navigate('AddRecord');
+    }
+  }, [navigation]);
 
-  const summary = useMemo(() => {
-    const vaccineRecords = records.filter((item) => item.record_type === 'vaccine');
-    const feedRecords = records.filter((item) => item.record_type !== 'vaccine' && item.feed_type !== '辅食');
-    const solidFoodRecords = records.filter((item) => item.record_type !== 'vaccine' && item.feed_type === '辅食');
-    const totalDuration = records.reduce((total, item) => total + (item.duration || 0), 0);
-    const avgDuration = records.length > 0 ? Math.round(totalDuration / records.length) : 0;
+  const handleProfilePress = useCallback(() => {
+    navigation.navigate('EditBaby');
+  }, [navigation]);
 
-    return [
-      {
-        type: 'vaccine',
-        icon: '💉',
-        label: '疫苗',
-        times: vaccineRecords.length,
-        sub: vaccineRecords.length > 0 ? '含最近接种记录' : '尚无接种记录',
-        color: '#EEF3FF',
-        textColor: '#4A6CF7',
-        iconBg: '#E8EDFF',
-      },
-      {
-        type: 'feed',
-        icon: '🍼',
-        label: '喂奶',
-        times: feedRecords.length,
-        sub: `${feedRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`,
-        color: '#FFF0F0',
-        textColor: '#FF6E68',
-        iconBg: '#FFE8E7',
-      },
-      {
-        type: 'solid',
-        icon: '🥣',
-        label: '辅食',
-        times: solidFoodRecords.length,
-        sub: `${solidFoodRecords.reduce((n, item) => n + (item.duration || 0), 0)} 分钟`,
-        color: '#FFF0F0',
-        textColor: '#FF6E68',
-        iconBg: '#FFE8E7',
-      },
-      {
-        type: 'total',
-        icon: '⏱️',
-        label: '总时长',
-        times: totalDuration,
-        sub: `均 ${avgDuration} 分钟/次`,
-        color: '#FFF8E7',
-        textColor: '#F59E0B',
-        iconBg: '#FFF4DC',
-      },
-    ];
-  }, [records]);
+  // 合并 AI 卡片
+  const allCards = useMemo(() => {
+    return feedCards;
+  }, [feedCards]);
+
+  // 分离信息流卡片和底部记录
+  const infoCards = allCards;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
+      <FlatList
+        data={infoCards}
+        keyExtractor={(item, index) => item.title + index}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={ACCENT} />
+        }
+        ListHeaderComponent={
+          <FeedHeader
+            profile={profile}
+            today={today}
+            weekday={weekday}
+            monthDay={monthDay}
+            onProfilePress={handleProfilePress}
+          />
+        }
+        ListEmptyComponent={
+          !loadingFeed ? null : (
+            <View style={styles.loadingWrap}>
+              <ActivityIndicator size="large" color={ACCENT} />
+              <Text style={styles.loadingText}>AI 正在生成内容...</Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.cardWrapper}>
+            <FeedCard card={item} onPress={handleCardPress} />
+          </View>
+        )}
+        ListFooterComponent={null}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>宝宝日常</Text>
-            <Text style={styles.subGreeting}>{name} · {age !== '-' ? age : '请设置生日'}</Text>
-          </View>
-          <View style={styles.datePill}>
-            <Text style={styles.datePillText}>{monthDay}</Text>
-            <Text style={styles.weekdayText}>{weekday}</Text>
-          </View>
-        </View>
+      />
 
-        {/* Profile Banner Card */}
-        <View style={styles.bannerCard}>
-          <View style={styles.bannerLeft}>
-            <View style={[styles.bannerAvatar, { backgroundColor: '#FFF0F0' }]}>
-              <Text style={styles.bannerAvatarText}>{emoji}</Text>
-            </View>
-            <View>
-              <Text style={styles.bannerName}>{name}</Text>
-              <Text style={styles.bannerMeta}>
-                {gender === '男' ? '男宝宝 ♂' : '女宝宝 ♀'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.bannerRight}>
-            <Text style={styles.bannerTag}>今日记录</Text>
-          </View>
-        </View>
-
-        {/* Summary Strip */}
-        <View style={styles.summaryStrip}>
-          {summary.map((item) => (
-            <View key={item.type} style={[styles.summaryItem, { backgroundColor: item.color }]}>
-              <View style={[styles.summaryIconWrap, { backgroundColor: item.iconBg }]}>
-                <Text style={styles.summaryIcon}>{item.icon}</Text>
-              </View>
-              <Text style={[styles.summaryLabel, { color: item.textColor }]}>{item.label}</Text>
-              <Text style={styles.summaryTimes}>{item.times}次</Text>
-              <Text style={styles.summarySub}>{item.sub}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Today's Records */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>今日记录</Text>
-          <Text style={styles.sectionCount}>{records.length} 条</Text>
-        </View>
-
-        <View style={styles.listCard}>
-          {records.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📝</Text>
-              <Text style={styles.emptyText}>今天暂无记录</Text>
-              <Text style={styles.emptyHint}>去「记录」页新增一条吧</Text>
-            </View>
-          ) : (
-            records.map((row, index) => (
-              <View key={row.id}>
-                <RecordRow item={row} />
-                {index < records.length - 1 && <View style={styles.rowDivider} />}
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={styles.footer} />
-      </ScrollView>
+      {/* 详情弹窗 */}
+      <FeedDetailModal
+        card={selectedCard}
+        visible={showDetail}
+        onClose={() => { setShowDetail(false); setSelectedCard(null); }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F7F7F8' },
-  content: { paddingBottom: 40 },
 
-  /* ── Header ── */
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+  listContent: { paddingBottom: 100 },
+
+  /* ── Feed Header ── */
+  feedHeader: {
+    paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
-  greeting: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
-  subGreeting: { fontSize: 14, color: '#888', marginTop: 3 },
-  datePill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    alignItems: 'center',
-    shadowColor: '#FF6E68',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  datePillText: { fontSize: 15, fontWeight: '800', color: '#FF6E68' },
-  weekdayText: { fontSize: 11, color: '#FFB3AF', fontWeight: '600', marginTop: 1 },
-
-  /* ── Banner Card ── */
-  bannerCard: {
-    marginHorizontal: 16,
+  profileCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 12,
     shadowColor: '#FF6E68',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
   },
-  bannerLeft: { flexDirection: 'row', alignItems: 'center' },
-  bannerAvatar: {
+  profileLeft: { flexDirection: 'row', alignItems: 'center' },
+  profileAvatar: {
     width: 52,
     height: 52,
     borderRadius: 16,
@@ -247,86 +241,86 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  bannerAvatarText: { fontSize: 26 },
-  bannerName: { fontSize: 19, fontWeight: '800', color: '#1A1A1A', marginBottom: 3 },
-  bannerMeta: { fontSize: 13, color: '#888' },
-  bannerRight: {
+  profileAvatarText: { fontSize: 26 },
+  profileName: { fontSize: 19, fontWeight: '800', color: '#1A1A1A', marginBottom: 3 },
+  profileMeta: { fontSize: 13, color: '#888' },
+  profileRight: {
     backgroundColor: '#FFF0F0',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  bannerTag: { color: '#FF6E68', fontWeight: '700', fontSize: 13 },
-
-  /* ── Summary Strip ── */
-  summaryStrip: {
-    flexDirection: 'row',
-    paddingHorizontal: 12,
-    gap: 8,
-    marginBottom: 20,
-  },
-  summaryItem: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 12,
-    alignItems: 'center',
-  },
-  summaryIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  summaryIcon: { fontSize: 17 },
-  summaryLabel: { fontSize: 12, fontWeight: '700', marginBottom: 2 },
-  summaryTimes: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
-  summarySub: { fontSize: 10, color: '#888', marginTop: 2, textAlign: 'center' },
-
-  /* ── Section ── */
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.2 },
-  sectionCount: {
-    backgroundColor: '#FFF0F0',
-    color: '#FF6E68',
-    fontSize: 12,
-    fontWeight: '700',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-
-  /* ── List Card ── */
-  listCard: {
-    marginHorizontal: 16,
+  profileTag: { color: '#FF6E68', fontWeight: '700', fontSize: 13 },
+  dateCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    shadowColor: '#000',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#FF6E68',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 2,
   },
-  rowDivider: {
-    height: 0.5,
-    backgroundColor: '#F0F0F0',
-    marginVertical: 4,
+  dateText: { fontSize: 15, fontWeight: '800', color: '#FF6E68' },
+  weekdayText: { fontSize: 12, color: '#FFB3AF', fontWeight: '600' },
+
+  /* ── Card List ── */
+  cardWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 0,
   },
 
-  /* ── Empty State ── */
-  emptyState: { alignItems: 'center', paddingVertical: 24 },
-  emptyIcon: { fontSize: 36, marginBottom: 10 },
-  emptyText: { fontSize: 15, color: '#888', fontWeight: '600', marginBottom: 4 },
-  emptyHint: { fontSize: 13, color: '#BBB' },
+  /* ── Loading ── */
+  loadingWrap: { alignItems: 'center', paddingVertical: 40 },
+  loadingText: { fontSize: 14, color: '#AAA', marginTop: 12 },
 
-  footer: { height: 30 },
+  /* ── Detail Modal ── */
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 999,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  modalSheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: '70%',
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginVertical: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  modalIcon: { fontSize: 28 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: '#1A1A1A', flex: 1 },
+  modalContent: { maxHeight: 300 },
+  modalDetail: { fontSize: 15, color: '#444', lineHeight: 24 },
+  modalCloseBtn: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  modalCloseText: { color: '#FF6E68', fontWeight: '700', fontSize: 16 },
 });

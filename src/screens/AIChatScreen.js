@@ -14,7 +14,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBabyProfile } from '../hooks/useBabyProfile';
 import { sendChatMessage, setApiKey } from '../services/aiChatService';
 
-const API_KEY_STORAGE = 'ai_chat_api_key';
 const CONVERSATIONS_STORAGE = 'ai_conversations';
 const MAX_STORED_MESSAGES = 50;
 
@@ -110,12 +109,9 @@ export default function AIChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [currentConvId, setCurrentConvId] = useState(conversationId);
   const flatListRef = useRef(null);
-  const apiKeyRef = useRef('');
 
   // 持久化的对话列表引用
   const convDataRef = useRef({ conversations: [], idx: -1 });
@@ -155,8 +151,6 @@ export default function AIChatScreen({ navigation, route }) {
   // 加载历史记录
   useEffect(() => {
     const loadData = async () => {
-      await loadApiKey();
-
       // 尝试迁移旧数据
       const legacy = await migrateOldData();
 
@@ -241,12 +235,6 @@ export default function AIChatScreen({ navigation, route }) {
     const text = inputText.trim();
     if (!text || loading) return;
 
-    if (!apiKeyRef.current) {
-      setShowApiKeyInput(true);
-      return;
-    }
-
-    setApiKey(apiKeyRef.current);
     setInputText('');
     setLoading(true);
 
@@ -271,26 +259,6 @@ export default function AIChatScreen({ navigation, route }) {
     }
   };
 
-  const handleSaveApiKey = async () => {
-    if (!apiKeyInput.trim()) return;
-    await AsyncStorage.setItem(API_KEY_STORAGE, apiKeyInput.trim());
-    apiKeyRef.current = apiKeyInput.trim();
-    setApiKey(apiKeyInput.trim());
-    setShowApiKeyInput(false);
-    setApiKeyInput('');
-    Alert.alert('已保存', 'API Key 已保存，请重新发送消息。');
-  };
-
-  const loadApiKey = async () => {
-    try {
-      const key = await AsyncStorage.getItem(API_KEY_STORAGE);
-      if (key) {
-        apiKeyRef.current = key;
-        setApiKey(key);
-      }
-    } catch (e) {}
-  };
-
   const renderBubble = ({ item }) => {
     const isUser = item.role === 'user';
     return (
@@ -308,7 +276,7 @@ export default function AIChatScreen({ navigation, route }) {
   const ageText = ageMonths !== null ? `${ageMonths}个月` : '';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* 顶部栏 */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -319,51 +287,16 @@ export default function AIChatScreen({ navigation, route }) {
           <Text style={styles.headerSubText}>{babyInfo.name} · {ageText || '月龄未知'}</Text>
         </View>
         <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => navigation.navigate('AIConversations')} style={styles.headerBtn}>
+            <Text style={styles.headerBtnIcon}>📋</Text>
+          </TouchableOpacity>
           {messages.length > 1 && (
             <TouchableOpacity onPress={handleClearHistory} style={styles.headerBtn}>
               <Text style={styles.headerBtnIcon}>🗑️</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => setShowApiKeyInput(true)} style={styles.headerBtn}>
-            <Text style={styles.settingsIcon}>⚙️</Text>
-          </TouchableOpacity>
         </View>
       </View>
-
-      {/* API Key 设置弹窗 */}
-      {showApiKeyInput && (
-        <View style={styles.apiKeyOverlay}>
-          <View style={styles.apiKeyModal}>
-            <Text style={styles.apiKeyTitle}>设置 API Key</Text>
-            <Text style={styles.apiKeyDesc}>
-              用于调用 AI 对话服务。可在 MiniMax 平台获取：platform.minimaxi.com
-            </Text>
-            <TextInput
-              style={styles.apiKeyInput}
-              placeholder="输入 API Key"
-              value={apiKeyInput}
-              onChangeText={setApiKeyInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-            />
-            <View style={styles.apiKeyBtns}>
-              <TouchableOpacity
-                style={[styles.apiKeyBtn, styles.apiKeyBtnCancel]}
-                onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
-              >
-                <Text style={styles.apiKeyBtnCancelText}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.apiKeyBtn, styles.apiKeyBtnSave]}
-                onPress={handleSaveApiKey}
-              >
-                <Text style={styles.apiKeyBtnSaveText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
 
       {/* 聊天区域 */}
       <FlatList
@@ -389,7 +322,6 @@ export default function AIChatScreen({ navigation, route }) {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         keyboardVerticalOffset={0}
-        style={{ paddingBottom: insets.bottom }}
       >
           <View style={styles.inputRow}>
             <TextInput
@@ -434,7 +366,6 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', gap: 8 },
   headerBtn: { padding: 4 },
   headerBtnIcon: { fontSize: 18 },
-  settingsIcon: { fontSize: 20 },
   chatList: { padding: 16, paddingBottom: 8 },
   bubbleRow: {
     flexDirection: 'row',
@@ -495,37 +426,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFC9C6',
   },
   sendBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  // API Key Modal
-  apiKeyOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 100,
-  },
-  apiKeyModal: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '85%',
-    maxWidth: 340,
-  },
-  apiKeyTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 10 },
-  apiKeyDesc: { fontSize: 13, color: '#777', lineHeight: 20, marginBottom: 16 },
-  apiKeyInput: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 16,
-  },
-  apiKeyBtns: { flexDirection: 'row', gap: 10 },
-  apiKeyBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  apiKeyBtnCancel: { backgroundColor: '#F0F0F0' },
-  apiKeyBtnCancelText: { color: '#666', fontSize: 15, fontWeight: '600' },
-  apiKeyBtnSave: { backgroundColor: '#FF6E68' },
-  apiKeyBtnSaveText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });

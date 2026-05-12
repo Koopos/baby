@@ -123,7 +123,7 @@ export default function AddRecordScreen() {
         setAdTaken(true);
         setAdDosage('一粒');
       }
-      Alert.alert('保存成功', '已保存到本地 SQLite。');
+      Alert.alert('保存成功');
     } catch (error) {
       Alert.alert('保存失败', '本地保存失败，请稍后再试。');
     } finally {

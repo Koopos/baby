@@ -1,13 +1,53 @@
-import { useEffect } from 'react';
-import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
+import { setApiKey } from '../services/aiChatService';
 
 const ACCENT = '#FF6E68';
 const GRADIENT_BG = '#FFF5F4';
+const API_KEY_STORAGE = 'ai_chat_api_key';
 
 export default function MeScreen({ navigation }) {
   const { profile, reloadProfile } = useBabyProfile();
+  const [apiKey, setApiKeyState] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+
+  useEffect(() => {
+    loadApiKey();
+  }, []);
+
+  async function loadApiKey() {
+    const saved = await AsyncStorage.getItem(API_KEY_STORAGE);
+    if (saved) {
+      setApiKeyState(saved);
+      setApiKey(saved);
+    }
+  }
+
+  const handleSaveApiKey = useCallback(async () => {
+    if (!apiKeyInput.trim()) {
+      Alert.alert('请输入 API Key');
+      return;
+    }
+    await AsyncStorage.setItem(API_KEY_STORAGE, apiKeyInput.trim());
+    setApiKeyState(apiKeyInput.trim());
+    setApiKey(apiKeyInput.trim());
+    setShowApiKeyInput(false);
+    setApiKeyInput('');
+    Alert.alert('保存成功', 'API Key 已设置');
+  }, [apiKeyInput]);
+
+  const handleClearApiKey = useCallback(async () => {
+    await AsyncStorage.removeItem(API_KEY_STORAGE);
+    setApiKeyState('');
+    setApiKey('');
+    setShowApiKeyInput(false);
+    setApiKeyInput('');
+    Alert.alert('已清除', 'API Key 已移除');
+  }, []);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
@@ -25,7 +65,8 @@ export default function MeScreen({ navigation }) {
   ];
 
   const menuItems = [
-    { icon: '🤖', title: 'AI 育儿助手', desc: '智能问答，个性化建议', color: '#EEF3FF', onPress: () => navigation.getParent().navigate('AIConversations') },
+    { icon: '🤖', title: 'AI 育儿助手', desc: '智能问答，个性化建议', color: '#EEF3FF', onPress: () => navigation.getParent().navigate('AIChat') },
+    { icon: '🔑', title: 'API Key 设置', desc: apiKey ? '已设置 ✓' : '点击设置 MiniMax Key', color: '#FFF8E7', onPress: () => setShowApiKeyInput(true) },
     { icon: '🥣', title: '喂养建议', desc: '按月龄查看推荐食谱', color: '#F3FAEA', onPress: () => navigation.getParent().navigate('FeedingGuide') },
     { icon: '💉', title: '就诊记录', desc: '疫苗与体检信息', color: '#FFF5E7', onPress: () => navigation.getParent().navigate('MedicalRecords') },
     { icon: 'ℹ️', title: '关于我们', desc: '版本信息与反馈', color: '#F5EEFF', onPress: () => navigation.getParent().navigate('About') },
@@ -148,6 +189,54 @@ export default function MeScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* API Key 设置弹窗 */}
+        {showApiKeyInput && (
+          <View style={styles.apiKeyOverlay}>
+            <TouchableOpacity
+              style={styles.apiKeyBackdrop}
+              activeOpacity={1}
+              onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
+            />
+            <View style={styles.apiKeyModal}>
+              <Text style={styles.apiKeyTitle}>API Key 设置</Text>
+              <Text style={styles.apiKeyDesc}>
+                用于调用 AI 对话服务。可在 MiniMax 平台获取：platform.minimaxi.com
+              </Text>
+              <TextInput
+                style={styles.apiKeyInput}
+                placeholder="输入 API Key"
+                value={apiKeyInput}
+                onChangeText={setApiKeyInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                secureTextEntry
+              />
+              <View style={styles.apiKeyBtns}>
+                {apiKey ? (
+                  <TouchableOpacity
+                    style={[styles.apiKeyBtn, styles.apiKeyBtnClear]}
+                    onPress={handleClearApiKey}
+                  >
+                    <Text style={styles.apiKeyBtnClearText}>清除</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity
+                  style={[styles.apiKeyBtn, styles.apiKeyBtnCancel]}
+                  onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
+                >
+                  <Text style={styles.apiKeyBtnCancelText}>取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.apiKeyBtn, styles.apiKeyBtnSave]}
+                  onPress={handleSaveApiKey}
+                >
+                  <Text style={styles.apiKeyBtnSaveText}>保存</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Footer spacing */}
         <View style={styles.footer} />
@@ -311,4 +400,51 @@ const styles = StyleSheet.create({
   menuArrow: { fontSize: 20, color: '#CCC', fontWeight: '300', marginLeft: 8 },
 
   footer: { height: 30 },
+
+  /* ── API Key Modal ── */
+  apiKeyOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  apiKeyBackdrop: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  apiKeyModal: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '85%',
+    maxWidth: 360,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  apiKeyTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 10, textAlign: 'center' },
+  apiKeyDesc: { fontSize: 13, color: '#777', lineHeight: 20, marginBottom: 16 },
+  apiKeyInput: {
+    backgroundColor: '#F7F7F8',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#222',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+  },
+  apiKeyBtns: { flexDirection: 'row', gap: 10 },
+  apiKeyBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  apiKeyBtnClear: { backgroundColor: '#FFF0F0' },
+  apiKeyBtnClearText: { color: '#FF6E68', fontSize: 15, fontWeight: '600' },
+  apiKeyBtnCancel: { backgroundColor: '#F0F0F0' },
+  apiKeyBtnCancelText: { color: '#666', fontSize: 15, fontWeight: '600' },
+  apiKeyBtnSave: { backgroundColor: '#FF6E68' },
+  apiKeyBtnSaveText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 });
