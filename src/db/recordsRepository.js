@@ -19,11 +19,11 @@ function getDatabase() {
   return dbPromise;
 }
 
-async function ensureColumn(db, columnName, columnDefinition) {
-  const rows = await db.getAllAsync('PRAGMA table_info(records);');
+async function ensureColumn(db, columnName, columnDefinition, tableName = 'records') {
+  const rows = await db.getAllAsync(`PRAGMA table_info(${tableName});`);
   const hasColumn = (rows || []).some((row) => row.name === columnName);
   if (!hasColumn) {
-    await db.execAsync(`ALTER TABLE records ADD COLUMN ${columnName} ${columnDefinition};`);
+    await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition};`);
   }
 }
 
@@ -61,6 +61,8 @@ export async function initDatabase() {
   await ensureColumn(db, 'hospital', 'TEXT');
   await ensureColumn(db, 'vaccinated_at', 'TEXT');
   await ensureColumn(db, 'recorded_at', 'TEXT');
+  await ensureColumn(db, 'weight', 'TEXT');
+  await ensureColumn(db, 'height', 'TEXT');
 
   const countRow = await db.getFirstAsync('SELECT COUNT(*) AS total FROM records;');
   if ((countRow?.total || 0) === 0) {
@@ -80,21 +82,23 @@ export async function initDatabase() {
   initialized = true;
 }
 
-export async function addRecord({ feedType, duration, notes, solidFood, recordedAt }) {
+export async function addRecord({ feedType, duration, notes, solidFood, recordedAt, weight, height }) {
   await initDatabase();
   const db = await getDatabase();
   const now = formatLocalDateTime(new Date());
   const actualTime = recordedAt?.trim() || now;
   await db.runAsync(
-    `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO records (record_type, feed_type, duration, notes, solid_food, created_at, recorded_at, weight, height)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     'feeding',
     feedType,
     Number.parseInt(duration, 10) || 0,
     notes?.trim() || '',
     solidFood?.trim() || '',
     now,
-    actualTime
+    actualTime,
+    weight?.trim() || '',
+    height?.trim() || ''
   );
 }
 
@@ -194,19 +198,30 @@ export async function getRecordById(id) {
   return row;
 }
 
-export async function updateRecord(id, { feedType, duration, notes, solidFood, diaperType, stoolConsistency, recordedAt }) {
+export async function getCheckupRecords() {
+  await initDatabase();
+  const db = await getDatabase();
+  const rows = await db.getAllAsync(
+    `SELECT * FROM records WHERE feed_type = '体检' ORDER BY duration ASC;`
+  );
+  return rows || [];
+}
+
+export async function updateRecord(id, { feedType, duration, notes, solidFood, diaperType, stoolConsistency, recordedAt, weight, height }) {
   await initDatabase();
   const db = await getDatabase();
   const actualTime = recordedAt?.trim() || null;
   await db.runAsync(
     `UPDATE records
-     SET feed_type = ?, duration = ?, notes = ?, solid_food = ?, recorded_at = ?
+     SET feed_type = ?, duration = ?, notes = ?, solid_food = ?, recorded_at = ?, weight = ?, height = ?
      WHERE id = ?;`,
     feedType,
     Number.parseInt(duration, 10) || 0,
     notes?.trim() || '',
     solidFood?.trim() || '',
     actualTime,
+    weight?.trim() || '',
+    height?.trim() || '',
     id
   );
 }
@@ -334,19 +349,23 @@ export async function initBabyProfile() {
       next_checkup TEXT DEFAULT '',
       weight TEXT DEFAULT '',
       height TEXT DEFAULT '',
+      birth_weight TEXT DEFAULT '',
+      birth_height TEXT DEFAULT '',
       development TEXT DEFAULT '良好'
     );
   `);
   // Migrate: add weight/height/development columns if missing (existing table)
-  await ensureColumn(db, 'weight', 'TEXT DEFAULT ""');
-  await ensureColumn(db, 'height', 'TEXT DEFAULT ""');
-  await ensureColumn(db, 'development', "TEXT DEFAULT '良好'");
+  await ensureColumn(db, 'weight', 'TEXT DEFAULT ""', 'baby_profile');
+  await ensureColumn(db, 'height', 'TEXT DEFAULT ""', 'baby_profile');
+  await ensureColumn(db, 'development', "TEXT DEFAULT '良好'", 'baby_profile');
+  await ensureColumn(db, 'birth_weight', 'TEXT DEFAULT ""', 'baby_profile');
+  await ensureColumn(db, 'birth_height', 'TEXT DEFAULT ""', 'baby_profile');
   // Ensure default row exists
   const row = await db.getFirstAsync('SELECT id FROM baby_profile WHERE id = 1;');
   if (!row) {
     await db.runAsync(
-      `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup, weight, height, development)
-       VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '', '', '', '良好');`
+       `INSERT INTO baby_profile (id, name, gender, birthday, avatar_emoji, next_checkup, weight, height, birth_weight, birth_height, development)
+       VALUES (1, '小宝贝', '男', '2023-11-01', '👶', '', '', '', '', '', '良好');`
     );
   }
 }
@@ -358,11 +377,11 @@ export async function getBabyProfile() {
   return row;
 }
 
-export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development }) {
+export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, birthWeight, birthHeight, development }) {
   await initBabyProfile();
   const db = await getDatabase();
   await db.runAsync(
-    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=?, weight=?, height=?, development=? WHERE id=1;`,
+    `UPDATE baby_profile SET name=?, gender=?, birthday=?, avatar_emoji=?, next_checkup=?, weight=?, height=?, birth_weight=?, birth_height=?, development=? WHERE id=1;`,
     name?.trim() || '小宝贝',
     gender || '男',
     birthday || '2023-11-01',
@@ -370,6 +389,8 @@ export async function updateBabyProfile({ name, gender, birthday, avatarEmoji, n
     nextCheckup?.trim() || '',
     weight?.trim() || '',
     height?.trim() || '',
+    birthWeight?.trim() || '',
+    birthHeight?.trim() || '',
     development || '良好'
   );
 }

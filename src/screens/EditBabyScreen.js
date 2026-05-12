@@ -14,6 +14,8 @@ export default function EditBabyScreen({ navigation, route }) {
   const [name, setName] = useState('');
   const [gender, setGender] = useState('男');
   const [birthday, setBirthday] = useState('');
+  const [birthWeight, setBirthWeight] = useState('');
+  const [birthHeight, setBirthHeight] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('👶');
   const [nextCheckup, setNextCheckup] = useState('');
   const [weight, setWeight] = useState('');
@@ -27,6 +29,8 @@ export default function EditBabyScreen({ navigation, route }) {
       setName(p.name || '');
       setGender(p.gender || '男');
       setBirthday(p.birthday || '');
+      setBirthWeight(p.birth_weight || '');
+      setBirthHeight(p.birth_height || '');
       setAvatarEmoji(p.avatar_emoji || '👶');
       setNextCheckup(p.next_checkup || '');
       setWeight(p.weight || '');
@@ -56,9 +60,17 @@ export default function EditBabyScreen({ navigation, route }) {
       Alert.alert('身高格式有误，请填写数字，如 68');
       return;
     }
+    if (birthWeight && !/^\d+(\.\d+)?$/.test(birthWeight.trim())) {
+      Alert.alert('出生体重格式有误，请填写数字，如 3.5');
+      return;
+    }
+    if (birthHeight && !/^\d+(\.\d+)?$/.test(birthHeight.trim())) {
+      Alert.alert('出生身高格式有误，请填写数字，如 50');
+      return;
+    }
     setSaving(true);
     try {
-      await updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, development });
+      await updateBabyProfile({ name, gender, birthday, avatarEmoji, nextCheckup, weight, height, birthWeight, birthHeight, development });
     } catch (err) {
       Alert.alert('保存失败', err.message);
       setSaving(false);
@@ -145,6 +157,36 @@ export default function EditBabyScreen({ navigation, route }) {
                 placeholderTextColor="#AAA"
                 keyboardType="numbers-and-punctuation"
                 maxLength={10}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.formRow}>
+              <Text style={styles.formLabel}>出生体重</Text>
+              <TextInput
+                style={styles.formInput}
+                value={birthWeight}
+                onChangeText={setBirthWeight}
+                placeholder="如 3.5"
+                placeholderTextColor="#AAA"
+                keyboardType="decimal-pad"
+                maxLength={6}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.formRow}>
+              <Text style={styles.formLabel}>出生身高</Text>
+              <TextInput
+                style={styles.formInput}
+                value={birthHeight}
+                onChangeText={setBirthHeight}
+                placeholder="如 50"
+                placeholderTextColor="#AAA"
+                keyboardType="decimal-pad"
+                maxLength={6}
               />
             </View>
 

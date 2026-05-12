@@ -3,7 +3,6 @@ import { useNavigation, useFocusEffect, useIsFocused } from '@react-navigation/n
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getRecordDateKeys, getRecordsByDate, getRecordsByMonth, seedTestRecords, clearAllRecords, deleteRecord } from '../db/recordsRepository';
-import RecordRow from '../components/RecordRow';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 
 const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
@@ -11,6 +10,46 @@ const ACCENT = '#FF6E68';
 
 function pad(num) { return String(num).padStart(2, '0'); }
 function formatDateKey(year, month, day) { return `${year}-${pad(month)}-${pad(day)}`; }
+
+// ─── 辅食颜色映射 ─────────────────────────────────────────────────────
+const SOLID_FOOD_COLORS = [
+  { bg: '#FFE8E7', text: '#FF6E68', label: '#FFB3AF' }, // 珊瑚红
+  { bg: '#E8F5FF', text: '#4A6CF7', label: '#A8C5FF' }, // 蓝色
+  { bg: '#FFF8E7', text: '#F59E0B', label: '#FFD166' }, // 橙黄
+  { bg: '#E8FFF0', text: '#52C41A', label: '#A3E096' }, // 绿色
+  { bg: '#F5E8FF', text: '#722ED1', label: '#C297FF' }, // 紫色
+  { bg: '#FFF0F8', text: '#EB2F96', label: '#FF8EC4' }, // 粉色
+  { bg: '#E7FFFC', text: '#00BFD6', label: '#66E5F0' }, // 青色
+  { bg: '#FFF5E7', text: '#D46B08', label: '#FFB066' }, // 深橙
+  { bg: '#F0FFF4', text: '#389E0D', label: '#85CF6A' }, // 深绿
+  { bg: '#EEF3FF', text: '#2F54EB', label: '#8095E8' }, // 靛蓝
+];
+
+// 按辅食名称分配固定颜色（相同名称 → 相同颜色）
+const foodColorCache = {};
+let colorIndex = 0;
+
+function getColorForFood(foodName) {
+  if (!foodName) return SOLID_FOOD_COLORS[0];
+  if (!(foodName in foodColorCache)) {
+    foodColorCache[foodName] = SOLID_FOOD_COLORS[colorIndex % SOLID_FOOD_COLORS.length];
+    colorIndex++;
+  }
+  return foodColorCache[foodName];
+}
+
+// 从记录列表中提取当天不同辅食及其颜色
+function getFoodColorsForDate(records) {
+  const foodMap = {};
+  records.forEach(r => {
+    if (r.feed_type === '辅食' && r.solid_food) {
+      if (!foodMap[r.solid_food]) {
+        foodMap[r.solid_food] = getColorForFood(r.solid_food);
+      }
+    }
+  });
+  return Object.values(foodMap);
+}
 
 export default function StatsScreen() {
   const navigation = useNavigation();
@@ -20,10 +59,10 @@ export default function StatsScreen() {
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
   const [selectedDate, setSelectedDate] = useState(formatDateKey(today.getFullYear(), today.getMonth() + 1, today.getDate()));
-  const [selectedRecords, setSelectedRecords] = useState([]);
   const [recordDateKeys, setRecordDateKeys] = useState([]);
-  const [solidFoodByDate, setSolidFoodByDate] = useState({});
-  const [vaccineCountByDate, setVaccineCountByDate] = useState({});
+  const [selectedRecords, setSelectedRecords] = useState([]);
+  const [solidFoodByDate, setSolidFoodByDate] = useState({}); // dateKey -> [{food, color}, ...]
+  const [solidFoodLegend, setSolidFoodLegend] = useState([]); // [{food, color}, ...] unique foods
   const [showDevMenu, setShowDevMenu] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -44,17 +83,32 @@ export default function StatsScreen() {
       getRecordsByDate(selectedDate),
       getRecordsByMonth(viewYear, viewMonth),
     ]);
-    const solidFoodMap = {};
-    const vaccineMap = {};
+
+    // Build per-date food list with colors (only solid food records)
+    const foodMap = {}; // dateKey -> [{food, color}]
+    const allFoods = {}; // foodName -> color (for legend)
     for (const record of allMonthRecords) {
-      const dateKey = (record.recorded_at || record.created_at).split(' ')[0];
-      if (record.record_type === 'vaccine') vaccineMap[dateKey] = (vaccineMap[dateKey] || 0) + 1;
-      else if (record.feed_type === '辅食' && record.solid_food) solidFoodMap[dateKey] = record.solid_food;
+      if (record.feed_type === '辅食' && record.solid_food) {
+        const dateKey = (record.recorded_at || record.created_at).split(' ')[0];
+        if (!foodMap[dateKey]) foodMap[dateKey] = [];
+        // avoid duplicate food on same day
+        if (!foodMap[dateKey].find(f => f.food === record.solid_food)) {
+          const color = getColorForFood(record.solid_food);
+          foodMap[dateKey].push({ food: record.solid_food, color });
+          if (!allFoods[record.solid_food]) {
+            allFoods[record.solid_food] = color;
+          }
+        }
+      }
     }
+
+    // Legend: all unique foods this month, sorted by first appearance
+    const legend = Object.entries(allFoods).map(([food, color]) => ({ food, color }));
+
     setRecordDateKeys(allDateKeys);
     setSelectedRecords(dayRecords);
-    setSolidFoodByDate(solidFoodMap);
-    setVaccineCountByDate(vaccineMap);
+    setSolidFoodByDate(foodMap);
+    setSolidFoodLegend(legend);
   }, [selectedDate, viewYear, viewMonth]);
 
   const handleSeed = async () => {
@@ -122,9 +176,11 @@ export default function StatsScreen() {
     return cells;
   }, [viewMonth, viewYear]);
 
-  const vaccineCount = selectedRecords.filter((item) => item.record_type === 'vaccine').length;
-  const feedCount = selectedRecords.length - vaccineCount;
-  const totalDuration = selectedRecords.filter((item) => item.record_type !== 'vaccine').reduce((total, item) => total + (item.duration || 0), 0);
+  // Only count solid food records
+  const solidFoodRecords = selectedRecords.filter((item) => item.feed_type === '辅食');
+  const solidFoodCount = solidFoodRecords.length;
+  // Count unique food types on selected date
+  const uniqueFoodsOnDate = [...new Set(solidFoodRecords.map(r => r.solid_food).filter(Boolean))];
 
   const emoji = profile?.avatar_emoji || '👶';
   const name = profile?.name || '小宝贝';
@@ -137,7 +193,7 @@ export default function StatsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={handleTitleTap}>
-            <Text style={styles.headerTitle}>日历记录</Text>
+            <Text style={styles.headerTitle}>辅食统计</Text>
           </Pressable>
           {showDevMenu && (
             <View style={styles.headerButtons}>
@@ -193,8 +249,7 @@ export default function StatsScreen() {
               const dateKey = formatDateKey(viewYear, viewMonth, day);
               const hasRecord = recordDateKeys.includes(dateKey);
               const isSelected = selectedDate === dateKey;
-              const solidFoodLabel = solidFoodByDate[dateKey];
-              const vaccineN = vaccineCountByDate[dateKey] || 0;
+              const foodsOnDay = solidFoodByDate[dateKey] || [];
               return (
                 <Pressable
                   key={dateKey}
@@ -206,20 +261,27 @@ export default function StatsScreen() {
                   onPress={() => setSelectedDate(dateKey)}
                 >
                   <Text style={[styles.dayText, isSelected && styles.dayTextSelected]}>{day}</Text>
-                  {solidFoodLabel && (
-                    <View style={[styles.tagBadge, isSelected && styles.tagBadgeSelected]}>
-                      <Text style={[styles.tagText, isSelected && styles.tagTextSelected]}>
-                        {String(solidFoodLabel).substring(0, 3)}
-                      </Text>
+                  {foodsOnDay.length > 0 && (
+                    <View style={styles.foodTagsWrap}>
+                      {foodsOnDay.slice(0, 3).map((item) => (
+                        <View
+                          key={item.food}
+                          style={[styles.foodTagBadge, { backgroundColor: item.color.bg }]}
+                        >
+                          <Text
+                            style={[styles.foodTagText, { color: item.color.text }]}
+                            numberOfLines={1}
+                          >
+                            {item.food.length > 4 ? item.food.slice(0, 3) + '…' : item.food}
+                          </Text>
+                        </View>
+                      ))}
+                      {foodsOnDay.length > 3 && (
+                        <Text style={[styles.foodMore, { color: isSelected ? '#FF6E68' : '#AAA' }]}>
+                          +{foodsOnDay.length - 3}
+                        </Text>
+                      )}
                     </View>
-                  )}
-                  {vaccineN > 0 && (
-                    <Text style={[styles.vaccineBadge, isSelected && styles.vaccineBadgeSelected]}>
-                      💉{vaccineN}
-                    </Text>
-                  )}
-                  {hasRecord && !solidFoodLabel && vaccineN === 0 && (
-                    <View style={[styles.dotBadge, isSelected && styles.dotBadgeSelected]} />
                   )}
                 </Pressable>
               );
@@ -227,48 +289,60 @@ export default function StatsScreen() {
           </View>
         </View>
 
-        {/* Legend */}
-        <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FFF0F0' }]} />
-            <Text style={styles.legendText}>有记录</Text>
+        {/* Food Legend */}
+        {solidFoodLegend.length > 0 && (
+          <View style={styles.legendRow}>
+            {solidFoodLegend.map(({ food, color }) => (
+              <View key={food} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: color.bg }]} />
+                <Text style={[styles.legendText, { color: color.text }]}>{food}</Text>
+              </View>
+            ))}
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#FFE8E7' }]} />
-            <Text style={styles.legendText}>选中</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <Text style={styles.legendTag}>🥣</Text>
-            <Text style={styles.legendText}>辅食</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <Text style={styles.legendTag}>💉</Text>
-            <Text style={styles.legendText}>疫苗</Text>
-          </View>
-        </View>
+        )}
 
         {/* Selected Day Detail */}
         <View style={styles.detailCard}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>{selectedDate}</Text>
             <View style={styles.detailMetaRow}>
-              {feedCount > 0 && <View style={[styles.metaBadge, { backgroundColor: '#FFF0F0' }]}><Text style={[styles.metaBadgeText, { color: '#FF6E68' }]}>喂养 {feedCount}次</Text></View>}
-              {vaccineCount > 0 && <View style={[styles.metaBadge, { backgroundColor: '#EEF3FF' }]}><Text style={[styles.metaBadgeText, { color: '#4A6CF7' }]}>疫苗 {vaccineCount}次</Text></View>}
-              {totalDuration > 0 && <View style={[styles.metaBadge, { backgroundColor: '#FFF8E7' }]}><Text style={[styles.metaBadgeText, { color: '#F59E0B' }]}>共{totalDuration}分钟</Text></View>}
+              <View style={[styles.metaBadge, { backgroundColor: '#FFF0F0' }]}>
+                <Text style={[styles.metaBadgeText, { color: '#FF6E68' }]}>
+                  🥣 辅食 {solidFoodCount}次
+                </Text>
+              </View>
+              {uniqueFoodsOnDate.length > 0 && (
+                <View style={[styles.metaBadge, { backgroundColor: '#EEF3FF' }]}>
+                  <Text style={[styles.metaBadgeText, { color: '#4A6CF7' }]}>
+                    {uniqueFoodsOnDate.length}种食材
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
-          {selectedRecords.length === 0 ? (
+          {solidFoodRecords.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📅</Text>
-              <Text style={styles.emptyText}>当天暂无记录</Text>
+              <Text style={styles.emptyIcon}>🥣</Text>
+              <Text style={styles.emptyText}>当天暂无辅食记录</Text>
             </View>
           ) : (
-            selectedRecords.map((item) => (
-              <Pressable key={item.id} onLongPress={() => handleDeleteRecord(item.id)}>
-                <RecordRow item={item} />
-                {selectedRecords.indexOf(item) < selectedRecords.length - 1 && <View style={styles.rowDivider} />}
-              </Pressable>
-            ))
+            solidFoodRecords.map((item) => {
+              const color = getColorForFood(item.solid_food);
+              return (
+                <View key={item.id} style={[styles.solidFoodRow, { borderLeftColor: color.text }]}>
+                  <View style={[styles.solidFoodDot, { backgroundColor: color.bg }]}>
+                    <Text style={styles.solidFoodDotText}>{item.solid_food?.charAt(0)}</Text>
+                  </View>
+                  <View style={styles.solidFoodInfo}>
+                    <Text style={[styles.solidFoodName, { color: color.text }]}>{item.solid_food}</Text>
+                    <Text style={styles.solidFoodTime}>
+                      {((item.recorded_at || item.created_at).split(' ')[1] || '').substring(0, 5)}
+                      {item.notes ? ` · ${item.notes}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })
           )}
         </View>
 
@@ -309,27 +383,24 @@ const styles = StyleSheet.create({
   weekRow: { flexDirection: 'row', marginBottom: 8 },
   weekLabel: { flex: 1, textAlign: 'center', color: '#AAA', fontSize: 13, fontWeight: '600' },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  emptyCell: { width: '14.285%', height: 66 },
-  dayCell: { width: '14.285%', height: 66, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 6, paddingHorizontal: 2, borderRadius: 10 },
+  /* ── Calendar Day Cell ── */
+  dayCell: { width: '14.285%', height: 70, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, borderRadius: 10 },
   dayCellHasRecord: { backgroundColor: '#FFF0F0' },
   dayCellSelected: { backgroundColor: '#FFE8E7' },
-  dayText: { color: '#333', fontWeight: '600', fontSize: 14 },
+  dayText: { color: '#333', fontWeight: '600', fontSize: 13 },
   dayTextSelected: { color: '#FF6E68', fontWeight: '800' },
-  tagBadge: { backgroundColor: '#FF6E68', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1, marginTop: 3 },
-  tagBadgeSelected: { backgroundColor: '#CC4F47' },
-  tagText: { color: '#fff', fontSize: 8, fontWeight: '700' },
-  tagTextSelected: { color: '#fff' },
-  vaccineBadge: { fontSize: 9, color: '#10B981', fontWeight: '700', marginTop: 2 },
-  vaccineBadgeSelected: { color: '#0D9668' },
-  dotBadge: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#FFB3AF', marginTop: 3 },
-  dotBadgeSelected: { backgroundColor: '#FF6E68' },
+
+  /* ── Calendar Food Tags (text below calendar day) ── */
+  foodTagsWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 1, marginTop: 2, paddingHorizontal: 1 },
+  foodTagBadge: { borderRadius: 3, paddingHorizontal: 2, paddingVertical: 1, marginBottom: 1 },
+  foodTagText: { fontSize: 7, fontWeight: '700' },
+  foodMore: { fontSize: 7, color: '#AAA', fontWeight: '700' },
 
   /* ── Legend ── */
-  legendRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 16, marginBottom: 16 },
+  legendRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 10, marginBottom: 16, flexWrap: 'wrap' },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
-  legendText: { fontSize: 12, color: '#AAA' },
-  legendTag: { fontSize: 12 },
+  legendText: { fontSize: 12, fontWeight: '600' },
 
   /* ── Detail Card ── */
   detailCard: { marginHorizontal: 16, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2 },
@@ -338,10 +409,32 @@ const styles = StyleSheet.create({
   detailMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   metaBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   metaBadgeText: { fontSize: 12, fontWeight: '700' },
-  rowDivider: { height: 0.5, backgroundColor: '#F0F0F0', marginVertical: 4 },
   emptyState: { alignItems: 'center', paddingVertical: 20 },
   emptyIcon: { fontSize: 32, marginBottom: 8 },
   emptyText: { fontSize: 14, color: '#AAA' },
+
+  /* ── Solid Food Row ── */
+  solidFoodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF6E68',
+    marginBottom: 4,
+  },
+  solidFoodDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  solidFoodDotText: { fontSize: 14, fontWeight: '800', color: '#FFF' },
+  solidFoodInfo: { flex: 1 },
+  solidFoodName: { fontSize: 15, fontWeight: '700', marginBottom: 2 },
+  solidFoodTime: { fontSize: 12, color: '#AAA' },
 
   footer: { height: 30 },
 });

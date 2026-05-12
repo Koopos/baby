@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 import { setApiKey } from '../services/aiChatService';
+import { getCheckupRecords } from '../db/recordsRepository';
+import GrowthChart from '../components/GrowthChart';
 
 const ACCENT = '#FF6E68';
 const GRADIENT_BG = '#FFF5F4';
@@ -14,6 +16,7 @@ export default function MeScreen({ navigation }) {
   const [apiKey, setApiKeyState] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [checkupRecords, setCheckupRecords] = useState([]);
 
   useEffect(() => {
     loadApiKey();
@@ -50,8 +53,10 @@ export default function MeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
+    const unsubscribe = navigation.addListener('focus', async () => {
       reloadProfile();
+      const records = await getCheckupRecords();
+      setCheckupRecords(records || []);
     });
     return unsubscribe;
   }, [navigation, reloadProfile]);
@@ -132,18 +137,27 @@ export default function MeScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
-        {/* Stats Cards */}
-        <Text style={styles.sectionTitle}>成长概览</Text>
-        <View style={styles.statsGrid}>
-          {stats.map((item) => (
-            <View key={item.label} style={[styles.statsCard, { backgroundColor: item.bg }]}>
-              <View style={styles.statsIconRow}>
-                <Text style={styles.statsIcon}>{item.icon}</Text>
-              </View>
-              <Text style={styles.statsLabel}>{item.label}</Text>
-              <Text style={styles.statsValue}>{item.value}</Text>
-            </View>
-          ))}
+        {/* Growth Chart */}
+        <Text style={styles.sectionTitle}>成长曲线</Text>
+        <View style={{ paddingHorizontal: 16 }}>
+          <GrowthChart
+              weightRecords={
+                checkupRecords
+                  .filter((r) => r.weight && !isNaN(parseFloat(r.weight)))
+                  .map((r) => ({ age: parseInt(r.duration, 10) || 0, value: parseFloat(r.weight) }))
+              }
+              heightRecords={
+                checkupRecords
+                  .filter((r) => r.height && !isNaN(parseFloat(r.height)))
+                  .map((r) => ({ age: parseInt(r.duration, 10) || 0, value: parseFloat(r.height) }))
+              }
+              birthWeight={profile?.birth_weight ? parseFloat(profile.birth_weight) : null}
+              birthHeight={profile?.birth_height ? parseFloat(profile.birth_height) : null}
+              maxAge={Math.max(
+                24,
+                ...checkupRecords.map((r) => parseInt(r.duration, 10) || 0)
+              )}
+            />
         </View>
 
         {/* Quick Action */}
@@ -346,6 +360,27 @@ const styles = StyleSheet.create({
   statsIcon: { fontSize: 22 },
   statsLabel: { fontSize: 12, color: '#888', marginBottom: 3, fontWeight: '500' },
   statsValue: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
+
+  /* ── Chart Card ── */
+  chartCard: {
+    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  chartEmpty: {
+    height: 200,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chartEmptyText: { fontSize: 14, color: '#AAA' },
 
   /* ── Action Card ── */
   actionCard: {
