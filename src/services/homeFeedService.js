@@ -1,10 +1,56 @@
 /**
  * 首页信息流 AI 服务
  * 基于宝宝数据和月龄，让 AI 生成适合展示的信息流内容
+ * 支持缓存：key 无变化时跳过 AI 请求，直接返回缓存内容
  */
 
 import { getBabyProfile, getRecordsByDate, getAllRecords } from '../db/recordsRepository';
 import { getAllReminders } from '../db/reminderRepository';
+
+const FEED_CACHE_KEY = 'home_feed_cache_v1';
+const FEED_KEY_FIELD = 'home_feed_cache_key_v1';
+
+// ─── Cache helpers ─────────────────────────────────────────────────────
+
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// 生成用户信息 cache key：birthday + 最新体重 + 最新身高
+// 只要这三个字段没变，AI 生成内容就相同（同一月龄同一人）
+async function generateCacheKey() {
+  const profile = await getBabyProfile();
+  const birthday = profile?.birthday || '';
+  const weight = profile?.weight || '';
+  const height = profile?.height || '';
+  return `${getTodayKey()}__${birthday}__${weight}__${height}`;
+}
+
+async function readCache() {
+  try {
+    const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+    const rawKey = await AsyncStorage.getItem(FEED_KEY_FIELD);
+    const rawData = await AsyncStorage.getItem(FEED_CACHE_KEY);
+    if (!rawKey || !rawData) return null;
+    const currentKey = await generateCacheKey();
+    if (rawKey !== currentKey) return null; // key 变了，需要重新请求
+    return JSON.parse(rawData);
+  } catch {
+    return null;
+  }
+}
+
+async function writeCache(cards) {
+  try {
+    const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage');
+    const key = await generateCacheKey();
+    await AsyncStorage.setItem(FEED_KEY_FIELD, key);
+    await AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify(cards));
+  } catch {
+    // 缓存失败静默忽略
+  }
+}
 
 // ─── 工具定义（复刻 AIChatService 的工具集，供 AI 调用）───────────────
 
@@ -230,6 +276,14 @@ function buildSystemPrompt(babyInfo = {}) {
 
 export async function fetchHomeFeedCards() {
   try {
+    // 先尝试读缓存
+    const cached = await readCache();
+    if (cached) {
+      console.log('[HomeFeed] 命中缓存，跳过 AI 请求');
+      return cached;
+    }
+
+    // 缓存未命中，请求 AI
     // 先获取宝宝基础信息，算出月龄
     const profile = await getBabyProfile();
     if (!profile) {
@@ -266,19 +320,24 @@ export async function fetchHomeFeedCards() {
       cards = generateFallbackCards(profile.name, ageMonths, profile.gender, profile.weight, profile.height);
     }
 
+    // 写入缓存
+    await writeCache(cards);
+
     return cards;
   } catch (err) {
     console.error('[HomeFeed] 获取信息流失败:', err);
-    // 出错时返回兜底数据
+    // 出错时返回兜底数据，并缓存兜底内容避免每次都重试
     try {
       const profile = await getBabyProfile();
-      return generateFallbackCards(
+      const fallback = generateFallbackCards(
         profile?.name || '宝宝',
         calcAge(profile?.birthday),
         profile?.gender || '男',
         profile?.weight || '',
         profile?.height || ''
       );
+      await writeCache(fallback);
+      return fallback;
     } catch {
       return [];
     }

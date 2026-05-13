@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 
@@ -47,14 +47,13 @@ const HEIGHT_REF = {
 // WEIGHT_REF entries: [P3, 中位数, P97]
 // HEIGHT_REF entries: [P3, 中位数, P97]
 
-const WIDTH = 312;
 const HEIGHT = 180;
 const PL = 42;
 const PR = 14;
 const PT = 14;
 const PB = 36;
-const CW = WIDTH - PL - PR;
 const CH = HEIGHT - PT - PB;
+const MIN_CHART_WIDTH = 280;
 
 // 刻度月龄
 const MONTHS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
@@ -77,7 +76,7 @@ function interpolateRef(ref, month) {
 }
 
 // 构建 P3-P97 填充带路径
-function buildBand(ref, monthRange, yScale) {
+function buildBand(ref, monthRange, xScale, yScale) {
   const pts = [];
   for (let m = monthRange[0]; m <= monthRange[monthRange.length - 1]; m += 0.5) {
     const v = interpolateRef(ref, m);
@@ -89,28 +88,57 @@ function buildBand(ref, monthRange, yScale) {
   }
   if (pts.length < 3) return '';
   return pts.map((p, i) =>
-    `${i === 0 ? 'M' : 'L'} ${PL + (p.x / 24) * CW} ${p.y}`
+    `${i === 0 ? 'M' : 'L'} ${xScale(p.x)} ${p.y}`
   ).join(' ') + ' Z';
 }
 
 // 构建单条参考线
-function buildRefLine(ref, monthRange, percentileIdx, yScale) {
+function buildRefLine(ref, monthRange, percentileIdx, xScale, yScale) {
   const pts = monthRange.map((m) => {
     const v = interpolateRef(ref, m)[percentileIdx];
     return { x: m, y: yScale(v) };
   });
   return pts.map((p, i) =>
-    `${i === 0 ? 'M' : 'L'} ${PL + (p.x / 24) * CW} ${p.y}`
+    `${i === 0 ? 'M' : 'L'} ${xScale(p.x)} ${p.y}`
   ).join(' ');
 }
 
 // 构建用户数据折线
-function buildDataLine(records, yScale) {
+function buildDataLine(records, xScale, yScale) {
   if (records.length === 0) return '';
   const pts = records.map((r) => ({ x: r.age, y: yScale(r.value) }));
   return pts.map((p, i) =>
-    `${i === 0 ? 'M' : 'L'} ${PL + (p.x / 24) * CW} ${p.y}`
+    `${i === 0 ? 'M' : 'L'} ${xScale(p.x)} ${p.y}`
   ).join(' ');
+}
+
+function formatValue(record, unit) {
+  if (!record) return '--';
+  return `${record.value.toFixed(unit === 'kg' ? 1 : 0)}${unit}`;
+}
+
+function buildTrend(records, unit) {
+  if (records.length < 2) return '记录 2 次后显示趋势';
+  const latest = records[records.length - 1];
+  const previous = records[records.length - 2];
+  const diff = latest.value - previous.value;
+  if (Math.abs(diff) < 0.05) return '与上次基本持平';
+  const sign = diff > 0 ? '+' : '';
+  const value = unit === 'kg' ? diff.toFixed(1) : diff.toFixed(0);
+  return `较上次 ${sign}${value}${unit}`;
+}
+
+function makeSummary(records, unit) {
+  const latest = records[records.length - 1];
+  return {
+    value: formatValue(latest, unit),
+    age: latest ? `${latest.age}月龄` : '未记录',
+    trend: buildTrend(records, unit),
+  };
+}
+
+function withAlpha(hex, alpha) {
+  return `${hex}${alpha}`;
 }
 
 const MetricChart = ({
@@ -125,26 +153,47 @@ const MetricChart = ({
   yMax,
   yTicks,
   monthRange,
+  chartWidth,
 }) => {
-  const xScale = (month) => PL + (month / 24) * CW;
+  const width = Math.max(chartWidth, MIN_CHART_WIDTH);
+  const chartContentWidth = width - PL - PR;
+  const xMax = monthRange[monthRange.length - 1] || 24;
+  const xScale = (month) => PL + (month / xMax) * chartContentWidth;
   const yScale = (v) => PT + CH - ((v - yMin) / (yMax - yMin)) * CH;
 
-  const band   = buildBand(refData, monthRange, yScale);
-  const median = buildRefLine(refData, monthRange, 1, yScale); // 中位数
-  const low    = buildRefLine(refData, monthRange, 0, yScale);  // P3
-  const high   = buildRefLine(refData, monthRange, 2, yScale);  // P97
-  const data   = buildDataLine(records, yScale);
+  const band   = buildBand(refData, monthRange, xScale, yScale);
+  const median = buildRefLine(refData, monthRange, 1, xScale, yScale); // 中位数
+  const low    = buildRefLine(refData, monthRange, 0, xScale, yScale);  // P3
+  const high   = buildRefLine(refData, monthRange, 2, xScale, yScale);  // P97
+  const data   = buildDataLine(records, xScale, yScale);
+  const summary = makeSummary(records, unit);
 
   return (
     <View style={cardStyles.card}>
       <View style={cardStyles.header}>
-        <Text style={cardStyles.title}>{title}</Text>
-        <Text style={cardStyles.unit}>{unit}</Text>
+        <View>
+          <Text style={cardStyles.title}>{title}</Text>
+          <Text style={cardStyles.subTitle}>{summary.trend}</Text>
+        </View>
+        <View style={[cardStyles.latestPill, { backgroundColor: withAlpha(dataColor, '14') }]}>
+          <Text style={[cardStyles.latestValue, { color: dataColor }]}>{summary.value}</Text>
+          <Text style={cardStyles.latestAge}>{summary.age}</Text>
+        </View>
       </View>
 
-      <Svg width={WIDTH} height={HEIGHT}>
+      <Svg width={width} height={HEIGHT}>
         {/* P3-P97 填充带（浅色） */}
         {band && <Path d={band} fill={fillColor} opacity={0.16} />}
+
+        {/* 垂直网格 */}
+        {monthRange.map((m) => (
+          <Line
+            key={`v-${m}`}
+            x1={xScale(m)} y1={PT}
+            x2={xScale(m)} y2={PT + CH}
+            stroke="#EFEFEF" strokeWidth={0.8}
+          />
+        ))}
 
         {/* P3 边界（灰色虚线） */}
         <Path d={low}   stroke={refColor} strokeWidth={0.8} strokeDasharray="4,4" fill="none" opacity={0.5} />
@@ -164,16 +213,6 @@ const MetricChart = ({
             cy={yScale(r.value)}
             r={records.length > 1 ? 3.5 : 5}
             fill={dataColor}
-          />
-        ))}
-
-        {/* 垂直网格 */}
-        {monthRange.map((m) => (
-          <Line
-            key={`v-${m}`}
-            x1={xScale(m)} y1={PT}
-            x2={xScale(m)} y2={PT + CH}
-            stroke="#EFEFEF" strokeWidth={0.8}
           />
         ))}
 
@@ -223,9 +262,10 @@ const MetricChart = ({
 
 const cardStyles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    paddingVertical: 12,
+    paddingTop: 14,
+    paddingBottom: 12,
     paddingHorizontal: 0,
     marginBottom: 12,
     shadowColor: '#000',
@@ -238,11 +278,20 @@ const cardStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    marginBottom: 2,
+    paddingHorizontal: 14,
+    marginBottom: 4,
   },
-  title: { fontSize: 15, fontWeight: '700', color: '#333' },
-  unit: { fontSize: 12, color: '#999' },
+  title: { fontSize: 16, fontWeight: '800', color: '#1A1A1A' },
+  subTitle: { fontSize: 11, color: '#999', marginTop: 3, fontWeight: '600' },
+  latestPill: {
+    minWidth: 84,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: 'flex-end',
+  },
+  latestValue: { fontSize: 16, fontWeight: '900' },
+  latestAge: { fontSize: 10, color: '#999', marginTop: 1, fontWeight: '700' },
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -263,21 +312,69 @@ const GrowthChart = ({
   birthHeight = null,
   maxAge = 24,
 }) => {
-  const allWeight = birthWeight
-    ? [{ age: 0, value: parseFloat(birthWeight) }, ...weightRecords]
-    : weightRecords;
+  const [chartWidth, setChartWidth] = useState(MIN_CHART_WIDTH);
 
-  const allHeight = birthHeight
-    ? [{ age: 0, value: parseFloat(birthHeight) }, ...heightRecords]
-    : heightRecords;
+  const allWeight = useMemo(() => {
+    const records = birthWeight
+      ? [{ age: 0, value: parseFloat(birthWeight) }, ...weightRecords]
+      : weightRecords;
+    return records
+      .filter((r) => Number.isFinite(r.age) && Number.isFinite(r.value))
+      .sort((a, b) => a.age - b.age);
+  }, [birthWeight, weightRecords]);
 
-  const monthRange = MONTHS.filter((m) => m <= maxAge);
-  if (monthRange[monthRange.length - 1] < maxAge) {
-    monthRange.push(maxAge);
-  }
+  const allHeight = useMemo(() => {
+    const records = birthHeight
+      ? [{ age: 0, value: parseFloat(birthHeight) }, ...heightRecords]
+      : heightRecords;
+    return records
+      .filter((r) => Number.isFinite(r.age) && Number.isFinite(r.value))
+      .sort((a, b) => a.age - b.age);
+  }, [birthHeight, heightRecords]);
+
+  const monthRange = useMemo(() => {
+    const rangeMax = Math.max(24, maxAge || 24);
+    const range = MONTHS.filter((m) => m <= rangeMax);
+    if (range[range.length - 1] < rangeMax) {
+      range.push(rangeMax);
+    }
+    return range;
+  }, [maxAge]);
+
+  const hasAnyRecord = allWeight.length > 0 || allHeight.length > 0;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onLayout={(event) => {
+        const nextWidth = Math.floor(event.nativeEvent.layout.width);
+        if (nextWidth > 0 && Math.abs(nextWidth - chartWidth) > 1) {
+          setChartWidth(nextWidth);
+        }
+      }}
+    >
+      <View style={styles.insightBar}>
+        <View style={styles.insightItem}>
+          <Text style={styles.insightLabel}>体重记录</Text>
+          <Text style={styles.insightValue}>{allWeight.length}次</Text>
+        </View>
+        <View style={styles.insightDivider} />
+        <View style={styles.insightItem}>
+          <Text style={styles.insightLabel}>身高记录</Text>
+          <Text style={styles.insightValue}>{allHeight.length}次</Text>
+        </View>
+        <View style={styles.insightDivider} />
+        <View style={styles.insightItem}>
+          <Text style={styles.insightLabel}>观察范围</Text>
+          <Text style={styles.insightValue}>0-{monthRange[monthRange.length - 1]}月</Text>
+        </View>
+      </View>
+      {!hasAnyRecord ? (
+        <View style={styles.emptyHint}>
+          <Text style={styles.emptyTitle}>还没有可绘制的数据</Text>
+          <Text style={styles.emptyText}>添加出生身高体重或体检记录后，这里会自动生成趋势线。</Text>
+        </View>
+      ) : null}
       <MetricChart
         title="体重"
         unit="kg"
@@ -290,6 +387,7 @@ const GrowthChart = ({
         yMax={20}
         yTicks={[0, 5, 10, 15, 20]}
         monthRange={monthRange}
+        chartWidth={chartWidth}
       />
       <MetricChart
         title="身高"
@@ -303,13 +401,41 @@ const GrowthChart = ({
         yMax={100}
         yTicks={[40, 55, 70, 85, 100]}
         monthRange={monthRange}
+        chartWidth={chartWidth}
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 16 },
+  container: { width: '100%' },
+  insightBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  insightItem: { flex: 1 },
+  insightLabel: { fontSize: 11, color: '#999', fontWeight: '700', marginBottom: 4 },
+  insightValue: { fontSize: 15, color: '#1A1A1A', fontWeight: '900' },
+  insightDivider: { width: 1, height: 28, backgroundColor: '#F1F1F1', marginHorizontal: 8 },
+  emptyHint: {
+    backgroundColor: '#FFF8E7',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12,
+  },
+  emptyTitle: { fontSize: 14, color: '#D46B08', fontWeight: '800', marginBottom: 3 },
+  emptyText: { fontSize: 12, color: '#A66A16', lineHeight: 18 },
 });
 
 export default GrowthChart;

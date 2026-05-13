@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { ScrollView, StyleSheet, Text, View, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useBabyProfile, calcAge } from '../hooks/useBabyProfile';
 import { setApiKey } from '../services/aiChatService';
@@ -12,6 +12,7 @@ const GRADIENT_BG = '#FFF5F4';
 const API_KEY_STORAGE = 'ai_chat_api_key';
 
 export default function MeScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
   const { profile, reloadProfile } = useBabyProfile();
   const [apiKey, setApiKeyState] = useState('');
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
@@ -63,6 +64,8 @@ export default function MeScreen({ navigation }) {
 
   async function onRefresh() {
     await reloadProfile();
+    const records = await getCheckupRecords();
+    setCheckupRecords(records || []);
   }
 
   const quickActions = [
@@ -138,8 +141,20 @@ export default function MeScreen({ navigation }) {
         </TouchableOpacity>
 
         {/* Growth Chart */}
-        <Text style={styles.sectionTitle}>成长曲线</Text>
-        <View style={{ paddingHorizontal: 16 }}>
+        <View style={styles.growthSectionHeader}>
+          <View>
+            <Text style={styles.sectionTitleInline}>成长曲线</Text>
+            <Text style={styles.sectionHint}>体重、身高与标准区间对照</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.growthRecordButton}
+            activeOpacity={0.75}
+            onPress={() => navigation.getParent().navigate('AddRecord', { recordType: '体检' })}
+          >
+            <Text style={styles.growthRecordButtonText}>记录</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.growthChartWrap}>
           <GrowthChart
               weightRecords={
                 checkupRecords
@@ -212,41 +227,47 @@ export default function MeScreen({ navigation }) {
               activeOpacity={1}
               onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
             />
-            <View style={styles.apiKeyModal}>
-              <Text style={styles.apiKeyTitle}>API Key 设置</Text>
-              <Text style={styles.apiKeyDesc}>
-                用于调用 AI 对话服务。可在 MiniMax 平台获取：platform.minimaxi.com
-              </Text>
-              <TextInput
-                style={styles.apiKeyInput}
-                placeholder="输入 API Key"
-                value={apiKeyInput}
-                onChangeText={setApiKeyInput}
-                autoCapitalize="none"
-                autoCorrect={false}
-                secureTextEntry
-              />
-              <View style={styles.apiKeyBtns}>
-                {apiKey ? (
+            <View style={[styles.apiKeyModalWrap, { paddingTop: Math.max(insets.top, 24) }]}>
+              <View style={styles.apiKeyModal}>
+                <Text style={styles.apiKeyTitle}>API Key 设置</Text>
+                <Text style={styles.apiKeyDesc}>
+                  用于调用 AI 对话服务。可在 MiniMax 平台获取：platform.minimaxi.com
+                </Text>
+                <TextInput
+                  style={styles.apiKeyInput}
+                  placeholder="输入 API Key"
+                  value={apiKeyInput}
+                  onChangeText={setApiKeyInput}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  contextMenuHidden={false}
+                  secureTextEntry={false}
+                />
+                <Text style={styles.apiKeySecurityHint}>
+                  API Key 仅本地存储，不会被上传
+                </Text>
+                <View style={styles.apiKeyBtns}>
+                  {apiKey ? (
+                    <TouchableOpacity
+                      style={[styles.apiKeyBtn, styles.apiKeyBtnClear]}
+                      onPress={handleClearApiKey}
+                    >
+                      <Text style={styles.apiKeyBtnClearText}>清除</Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
-                    style={[styles.apiKeyBtn, styles.apiKeyBtnClear]}
-                    onPress={handleClearApiKey}
+                    style={[styles.apiKeyBtn, styles.apiKeyBtnCancel]}
+                    onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
                   >
-                    <Text style={styles.apiKeyBtnClearText}>清除</Text>
+                    <Text style={styles.apiKeyBtnCancelText}>取消</Text>
                   </TouchableOpacity>
-                ) : null}
-                <TouchableOpacity
-                  style={[styles.apiKeyBtn, styles.apiKeyBtnCancel]}
-                  onPress={() => { setShowApiKeyInput(false); setApiKeyInput(''); }}
-                >
-                  <Text style={styles.apiKeyBtnCancelText}>取消</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.apiKeyBtn, styles.apiKeyBtnSave]}
-                  onPress={handleSaveApiKey}
-                >
-                  <Text style={styles.apiKeyBtnSaveText}>保存</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.apiKeyBtn, styles.apiKeyBtnSave]}
+                    onPress={handleSaveApiKey}
+                  >
+                    <Text style={styles.apiKeyBtnSaveText}>保存</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
@@ -339,6 +360,36 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     marginHorizontal: 20,
     letterSpacing: -0.2,
+  },
+  growthSectionHeader: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionTitleInline: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#1A1A1A',
+    letterSpacing: -0.2,
+  },
+  sectionHint: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 3,
+    fontWeight: '600',
+  },
+  growthRecordButton: {
+    backgroundColor: '#FFF0F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  growthRecordButtonText: { color: '#FF6E68', fontWeight: '800', fontSize: 13 },
+  growthChartWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
 
   /* ── Stats Grid ── */
@@ -440,7 +491,7 @@ const styles = StyleSheet.create({
   apiKeyOverlay: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     alignItems: 'center',
     zIndex: 999,
   },
@@ -448,6 +499,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  apiKeyModalWrap: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 16,
   },
   apiKeyModal: {
     backgroundColor: '#FFFFFF',
@@ -470,9 +526,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
     color: '#222',
-    marginBottom: 16,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E8E8E8',
+  },
+  apiKeySecurityHint: {
+    fontSize: 11,
+    color: '#AAA',
+    marginBottom: 16,
+    textAlign: 'center',
   },
   apiKeyBtns: { flexDirection: 'row', gap: 10 },
   apiKeyBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },

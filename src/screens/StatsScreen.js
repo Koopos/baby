@@ -166,7 +166,8 @@ export default function StatsScreen() {
   useEffect(() => { let cancelled = false; const load = async () => { if (!cancelled) await loadData(); }; load(); return () => { cancelled = true; }; }, [viewMonth, selectedDate, viewYear]);
 
   const calendarCells = useMemo(() => {
-    const firstDay = new Date(viewYear, viewMonth - 1, 1);
+    // 用 noon 避免时区边界导致 getDay() 错位
+    const firstDay = new Date(viewYear, viewMonth - 1, 1, 12);
     const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
     const startOffset = (firstDay.getDay() + 6) % 7;
     const cells = [];
@@ -384,6 +385,7 @@ const styles = StyleSheet.create({
   weekLabel: { flex: 1, textAlign: 'center', color: '#AAA', fontSize: 13, fontWeight: '600' },
   daysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   /* ── Calendar Day Cell ── */
+  emptyCell: { width: '14.285%', height: 70 },
   dayCell: { width: '14.285%', height: 70, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 4, paddingHorizontal: 2, borderRadius: 10 },
   dayCellHasRecord: { backgroundColor: '#FFF0F0' },
   dayCellSelected: { backgroundColor: '#FFE8E7' },
