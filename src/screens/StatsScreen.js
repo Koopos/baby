@@ -166,10 +166,13 @@ export default function StatsScreen() {
   useEffect(() => { let cancelled = false; const load = async () => { if (!cancelled) await loadData(); }; load(); return () => { cancelled = true; }; }, [viewMonth, selectedDate, viewYear]);
 
   const calendarCells = useMemo(() => {
-    // 用 noon 避免时区边界导致 getDay() 错位
-    const firstDay = new Date(viewYear, viewMonth - 1, 1, 12);
-    const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
-    const startOffset = (firstDay.getDay() + 6) % 7;
+    // 用 UTC 方法避免本地时区歧义导致 getDay() 错位
+    // new Date(y, m-1, d, 12) 在某些时区设备上 getDay() 可能返回前一天
+    const utcDate = Date.UTC(viewYear, viewMonth - 1, 1);
+    const firstDay = new Date(utcDate);
+    const daysInMonth = new Date(Date.UTC(viewYear, viewMonth, 0)).getUTCDate();
+    // getUTCDay(): 0=Sun,1=Mon,...,6=Sat → 转为 周一=0 格式
+    const startOffset = (firstDay.getUTCDay() + 6) % 7;
     const cells = [];
     for (let i = 0; i < startOffset; i += 1) cells.push(null);
     for (let day = 1; day <= daysInMonth; day += 1) cells.push(day);
