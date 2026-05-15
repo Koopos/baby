@@ -1,48 +1,7 @@
-import { useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { checkForUpdate, downloadAndApplyUpdate } from '../services/updateService';
 
 export default function AboutScreen({ navigation }) {
-  const [checking, setChecking] = useState(false);
-  const [downloading, setDownloading] = useState(false);
-
-  const handleCheckUpdate = async () => {
-    if (checking || downloading) return;
-    setChecking(true);
-    const result = await checkForUpdate();
-    setChecking(false);
-
-    if (result.error) {
-      const errorMsg = result.error.message || '未知错误';
-      Alert.alert(
-        '检查更新失败',
-        errorMsg + '\n\n提示：EAS Update 功能需要在 EAS Build 打包的应用中才能使用。',
-        [{ text: '确定' }]
-      );
-      return;
-    }
-
-    if (!result.available) {
-      Alert.alert('已是最新版本', `当前已是最新版本（v1.0.0）`, [{ text: '确定' }]);
-      return;
-    }
-
-    Alert.alert('发现新版本', '有新版本可用，是否立即更新？', [
-      { text: '稍后', style: 'cancel' },
-      {
-        text: '立即更新',
-        onPress: async () => {
-          setDownloading(true);
-          const { error: updateError } = await downloadAndApplyUpdate();
-          setDownloading(false);
-          if (updateError) {
-            Alert.alert('更新失败', '下载更新失败，请稍后重试。', [{ text: '确定' }]);
-          }
-        },
-      },
-    ]);
-  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -74,12 +33,6 @@ export default function AboutScreen({ navigation }) {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.updateBtn} onPress={handleCheckUpdate} disabled={checking || downloading} activeOpacity={0.8}>
-          <Text style={styles.updateBtnText}>
-            {checking ? '检查中...' : downloading ? '更新中...' : '检查新版本'}
-          </Text>
-        </TouchableOpacity>
-
         <Text style={styles.footer}>问题反馈：宝宝成长记录</Text>
       </View>
     </SafeAreaView>
@@ -102,7 +55,5 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   infoLabel: { fontSize: 15, color: '#666' },
   infoValue: { fontSize: 15, color: '#222', fontWeight: '600' },
-  updateBtn: { backgroundColor: '#FF6E68', borderRadius: 26, padding: 15, alignItems: 'center', marginBottom: 16 },
-  updateBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   footer: { textAlign: 'center', color: '#ccc', fontSize: 13, marginTop: 8 },
 });
